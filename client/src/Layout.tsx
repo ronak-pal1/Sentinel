@@ -1,27 +1,29 @@
 import { Outlet } from "react-router-dom";
-import Footer from "./components/Footer";
 import Header from "./components/Header";
 import RulerEffect from "./components/RulerEffect";
 
 const Layout = () => {
   return (
-    <div className="flex flex-1 flex-row h-screen overflow-hidden ">
-      <div className="w-17.5 h-screen border-r border-black/30 bg-[#FFFCF0]">
+    <div className="flex flex-1 flex-row h-screen overflow-hidden bg-(--background-color)">
+      <div className="hidden md:block w-17.5 h-screen border-r border-(--border-color) bg-(--surface-color) shrink-0">
         <RulerEffect height="h-screen" />
       </div>
 
-      <div className="flex-1 w-full ">
-        <Header />
-        <div className="overflow-y-scroll h-full scrollbar-hide">
-        <main>
-          <Outlet />
-        </main>
-        <Footer />
+      <div className="flex flex-col flex-1 w-full min-w-0 h-screen">
+        <div className="shrink-0 sticky top-0 z-20">
+          <Header />
         </div>
-      
+        <div
+          id="main-scroll"
+          className="flex-1 min-h-0 overflow-y-auto scrollbar-hide"
+        >
+          <main>
+            <Outlet />
+          </main>
+        </div>
       </div>
 
-      <div className="w-17.5 h-screen border-l border-black/30 bg-[#FFFCF0]">
+      <div className="hidden md:block w-17.5 h-screen border-l border-(--border-color) bg-(--surface-color) shrink-0">
         <RulerEffect height="h-screen" />
       </div>
     </div>

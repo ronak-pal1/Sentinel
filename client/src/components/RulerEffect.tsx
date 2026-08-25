@@ -8,7 +8,7 @@ const RulerEffect = ({
   const patternId = `ruler-lines-${lineSpacing}`;
 
   return (
-    <div className={`${width} ${height} border-r border-[#E5E0D8] shrink-0 overflow-hidden ${className}`}>
+    <div className={`${width} ${height} border-r border-(--border-color) shrink-0 overflow-hidden ${className}`}>
       <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <pattern
@@ -22,7 +22,7 @@ const RulerEffect = ({
               y1={lineSpacing - 0.5}
               x2="100%"
               y2={lineSpacing - 0.5}
-              stroke="#E5E0D8"
+              stroke="var(--border-color)"
               strokeWidth="1"
             />
           </pattern>

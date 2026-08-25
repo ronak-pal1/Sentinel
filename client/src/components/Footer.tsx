@@ -1,70 +1,95 @@
+import { Link } from "react-router-dom";
 import RulerEffect from "./RulerEffect";
 
+const GITHUB_URL = "https://github.com/ronak-pal1/Sentinel";
+
 const Footer = () => {
-  const sitemapLinks = ["Welcome", "Work", "AI", "Profile"];
+  const sitemapLinks = [
+    { name: "Welcome", href: "/#welcome" },
+    { name: "Incident", href: "/#incident" },
+    { name: "Capabilities", href: "/#capabilities" },
+    { name: "Dashboard", href: "/app" },
+  ];
 
   const elsewhereLinks = [
-    { name: "Awwwards", href: "#" },
-    { name: "Dribbble", href: "#" },
-    { name: "LinkedIn", href: "#" },
-    { name: "ThemeForest", href: "#" },
+    { name: "GitHub", href: GITHUB_URL },
+    {
+      name: "TrueForge",
+      href: "https://github.com/topics/trueforge",
+    },
+    {
+      name: "License",
+      href: `${GITHUB_URL}/blob/main/LICENSE`,
+    },
   ];
 
   return (
-    <footer className="w-full text-[#1A1A1A] font-sans px-8 pb-8  relative">
+    <footer className=" text-(--foreground-color) font-sans px-4 sm:px-8 pb-8 relative">
       <div className="w-full absolute left-0 -z-10">
         <RulerEffect width="w-full" />
       </div>
 
       <div className="pt-16 flex flex-col items-center">
-        {/* 1. Central CTA Button */}
-        <a
-          href="#portfolio"
+        <Link
+          to="/app"
           className="bg-primary hover:bg-[#e0a240] text-black font-medium px-8 py-4 flex items-center gap-2 transition-colors duration-200 mb-12"
         >
           Explore Product
           <span className="text-lg">↗</span>
-        </a>
+        </Link>
 
-        {/* 2. Item Tag Header */}
         <div className="flex items-baseline mb-6">
-          <h3 className="text-xl font-medium text-black">GitHub</h3>
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xl font-medium text-(--foreground-color) hover:opacity-80"
+          >
+            GitHub
+          </a>
         </div>
 
-        {/* 3. Tech Stack Diagram / Illustration Section */}
         <div className="w-full max-w-7xl relative mb-2 overflow-hidden">
-          {/* Replace src with your actual circuit/tech stack illustration asset */}
-          <div className="w-full h-25 bg-slate-300"></div>
+          <div className="w-full h-25 bg-(--surface-color) border border-(--border-color)" />
         </div>
 
-        {/* 4. Main 4-Column Footer Navigation */}
-        <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 py-6 border-t border-black/50">
-          {/* Column 2: Sitemap */}
+        <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 py-6 border-t border-(--border-color)">
           <div className="flex flex-col gap-3">
-            <span className="text-xs tracking-widest text-[#A39E93] uppercase font-medium mb-2">
+            <span className="text-xs tracking-widest text-(--muted-color) uppercase font-medium mb-2">
               Sitemap
             </span>
-            {sitemapLinks.map((item) => (
-              <a
-                key={item}
-                href={`#${item.toLowerCase()}`}
-                className="text-[#6B655B] hover:text-black text-base transition-colors w-max"
-              >
-                {item}
-              </a>
-            ))}
+            {sitemapLinks.map((item) =>
+              item.href.startsWith("/app") ? (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className="text-(--muted-color) hover:text-(--foreground-color) text-base transition-colors w-max"
+                >
+                  {item.name}
+                </Link>
+              ) : (
+                <a
+                  key={item.name}
+                  href={item.href}
+                  className="text-(--muted-color) hover:text-(--foreground-color) text-base transition-colors w-max"
+                >
+                  {item.name}
+                </a>
+              ),
+            )}
           </div>
 
-          {/* Column 3: Elsewhere */}
           <div className="flex flex-col gap-3">
-            <span className="text-xs tracking-widest text-[#A39E93] uppercase font-medium mb-2">
+            <span className="text-xs tracking-widest text-(--muted-color) uppercase font-medium mb-2">
               Elsewhere
             </span>
             {elsewhereLinks.map((link) => (
               <a
                 key={link.name}
                 href={link.href}
-                className="text-[#6B655B] hover:text-black text-base flex items-center gap-1 transition-colors w-max"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-(--muted-color) hover:text-(--foreground-color) text-base flex items-center gap-1 transition-colors w-max"
               >
                 {link.name} <span className="text-xs">↗</span>
               </a>
@@ -72,17 +97,23 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* 5. Bottom Bar */}
-        <div className="w-full max-w-7xl pt-8 border-t border-black/50 flex flex-col md:flex-row justify-between items-center text-xs tracking-widest text-[#A39E93] uppercase">
+        <div
+          id="privacy"
+          className="w-full max-w-7xl pt-8 border-t border-(--border-color) flex flex-col md:flex-row justify-between items-center text-xs tracking-widest text-(--muted-color) uppercase scroll-mt-24"
+        >
           <p>© 2026 Sentinel : ALL RIGHTS RESERVED</p>
           <a
-            href="#privacy"
-            className="hover:text-black transition-colors mt-2 md:mt-0"
+            href={`${GITHUB_URL}/blob/main/LICENSE`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-(--foreground-color) transition-colors mt-2 md:mt-0"
           >
             PRIVACY
           </a>
         </div>
       </div>
+
+      
     </footer>
   );
 };

@@ -43,31 +43,30 @@ const tracks: Track[] = [
 
 function IsoTile({ accent, index }: { accent: string; index: number }) {
   return (
-    <div className="relative w-105 h-90 flex items-center justify-center">
+    <div className="relative w-full max-w-105 aspect-420/360 flex items-center justify-center mx-auto">
       <svg
         viewBox="0 0 420 360"
         className="w-full h-full overflow-visible"
         style={{ animation: "sentinel-float 5s ease-in-out infinite" }}
+        preserveAspectRatio="xMidYMid meet"
       >
         <defs>
           <linearGradient id={`top-${index}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#F1ECDD" />
-            <stop offset="100%" stopColor="#E3DAC4" />
+            <stop offset="0%" stopColor="var(--panel-color)" />
+            <stop offset="100%" stopColor="var(--surface-color)" />
           </linearGradient>
           <linearGradient id={`side-${index}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#D8CDB1" />
-            <stop offset="100%" stopColor="#C7BB9C" />
+            <stop offset="0%" stopColor="var(--surface-color)" />
+            <stop offset="100%" stopColor="var(--border-color)" />
           </linearGradient>
         </defs>
 
-        {/* base plate */}
         <polygon
           points="210,120 340,190 210,260 80,190"
           fill={`url(#top-${index})`}
-          stroke="#C7BB9C"
+          stroke="var(--card-border)"
           strokeWidth="1"
         />
-        {/* plate rim dots */}
         {Array.from({ length: 16 }).map((_, i) => {
           const angle = (i / 16) * Math.PI * 2;
           const rx = 118 * Math.cos(angle);
@@ -78,13 +77,12 @@ function IsoTile({ accent, index }: { accent: string; index: number }) {
               cx={210 + rx}
               cy={190 + ry}
               r="1.6"
-              fill="#B8AB89"
+              fill="var(--muted-color)"
               opacity={0.6}
             />
           );
         })}
 
-        {/* four raised inset blocks, one pulses per active track */}
         {[
           { cx: 210, cy: 150, delay: 0 },
           { cx: 165, cy: 175, delay: 0.4 },
@@ -100,23 +98,22 @@ function IsoTile({ accent, index }: { accent: string; index: number }) {
           >
             <polygon
               points={`${b.cx},${b.cy - 26} ${b.cx + 30},${b.cy - 11} ${b.cx},${b.cy + 4} ${b.cx - 30},${b.cy - 11}`}
-              fill={i === index % 4 ? accent : "#DCD2B8"}
+              fill={i === index % 4 ? accent : "var(--surface-color)"}
               opacity={i === index % 4 ? 0.9 : 1}
-              stroke="#B8AB89"
+              stroke="var(--card-border)"
               strokeWidth="0.75"
             />
             <polygon
               points={`${b.cx},${b.cy + 4} ${b.cx + 30},${b.cy - 11} ${b.cx + 30},${b.cy + 1} ${b.cx},${b.cy + 16}`}
-              fill="#B8AB89"
+              fill="var(--border-color)"
             />
             <polygon
               points={`${b.cx},${b.cy + 4} ${b.cx - 30},${b.cy - 11} ${b.cx - 30},${b.cy + 1} ${b.cx},${b.cy + 16}`}
-              fill="#CFC3A4"
+              fill="var(--card-border)"
             />
           </g>
         ))}
 
-        {/* leader line, top-left */}
         <line
           x1="60"
           y1="60"
@@ -128,10 +125,10 @@ function IsoTile({ accent, index }: { accent: string; index: number }) {
         />
       </svg>
 
-      <span className="absolute left-2 top-32 text-[10px] font-mono tracking-widest text-stone-400">
+      <span className="absolute left-2 top-[35%] text-[10px] font-mono tracking-widest text-(--muted-color)">
         {tracks[index].leftLabel}
       </span>
-      <span className="absolute left-4 bottom-4 text-[10px] font-mono tracking-widest text-stone-400">
+      <span className="absolute left-4 bottom-4 text-[10px] font-mono tracking-widest text-(--muted-color)">
         {tracks[index].bottomLabel}
       </span>
     </div>
@@ -147,7 +144,7 @@ const Section3 = () => {
   };
 
   return (
-    <div className="relative w-full py-24 px-8 overflow-hidden">
+    <div className="relative w-full py-16 sm:py-24 px-4 sm:px-8 overflow-x-clip">
       <style>{`
         @keyframes sentinel-float {
           0%, 100% { transform: translateY(0px); }
@@ -159,65 +156,67 @@ const Section3 = () => {
         }
       `}</style>
 
-
-
-      {/* heading */}
       <div className="text-center max-w-3xl mx-auto mt-6">
-        <h2 className="text-5xl font-semibold tracking-tight">
-          <span className="text-stone-900">Primarily</span>{" "}
-          <span className="text-stone-400">focused on</span>
+        <h2 className="text-4xl sm:text-5xl font-semibold tracking-tight">
+          <span className="text-(--foreground-color)">Primarily</span>{" "}
+          <span className="text-(--muted-color)">focused on</span>
         </h2>
-        <p className="mt-8 text-base text-stone-500 leading-relaxed">
+        <p className="mt-8 text-base text-(--muted-color) leading-relaxed">
           One loop, run three different ways, reads before it acts, verifies
           before it ships, and asks before it's irreversible.
         </p>
       </div>
 
-      {/* content row */}
-      <div className="mt-20 max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12">
-        <div className="shrink-0">
+      <div className="mt-16 sm:mt-20 max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-10 md:gap-12">
+        <div className="w-full md:w-[min(100%,26.25rem)] shrink-0">
           <IsoTile accent={track.accent} index={active} />
         </div>
 
-        <div className="flex-1 max-w-sm">
-          <h3 className="text-4xl font-semibold text-stone-900">{track.name}</h3>
+        <div className="flex-1 w-full max-w-sm text-center md:text-left">
+          <h3 className="text-3xl sm:text-4xl font-semibold text-(--foreground-color)">
+            {track.name}
+          </h3>
           <p
             className="mt-3 text-[11px] font-mono tracking-widest"
             style={{ color: track.accent }}
           >
             {track.meta} · {track.years}
           </p>
-          <p className="mt-6 text-lg text-stone-600 leading-relaxed">
+          <p className="mt-6 text-lg text-(--muted-color) leading-relaxed">
             {track.desc}
           </p>
 
-          <div className="mt-10 flex gap-3">
+          <div className="mt-10 flex gap-3 justify-center md:justify-start">
             <button
+              type="button"
               onClick={() => go(-1)}
-              className="w-11 h-11 flex items-center justify-center bg-[#F5F0E4] border border-stone-300 hover:border-stone-400 transition-colors"
+              className="w-11 h-11 flex items-center justify-center bg-(--surface-color) border border-(--border-color) hover:border-(--muted-color) transition-colors"
               aria-label="Previous track"
             >
-              <FiChevronLeft className="text-stone-800" />
+              <FiChevronLeft className="text-(--foreground-color)" />
             </button>
             <button
+              type="button"
               onClick={() => go(1)}
-              className="w-11 h-11 flex items-center justify-center bg-[#FBF7EE] border border-stone-200 hover:border-stone-400 transition-colors"
+              className="w-11 h-11 flex items-center justify-center bg-(--panel-color) border border-(--border-color) hover:border-(--muted-color) transition-colors"
               aria-label="Next track"
             >
-              <FiChevronRight className="text-stone-400" />
+              <FiChevronRight className="text-(--muted-color)" />
             </button>
           </div>
 
-          <div className="mt-6 flex gap-1.5">
+          <div className="mt-6 flex gap-1.5 justify-center md:justify-start">
             {tracks.map((t, i) => (
               <button
                 key={t.name}
+                type="button"
                 onClick={() => setActive(i)}
                 aria-label={`Go to ${t.name}`}
                 className="h-1 transition-all"
                 style={{
                   width: i === active ? 24 : 10,
-                  backgroundColor: i === active ? track.accent : "#DCD2B8",
+                  backgroundColor:
+                    i === active ? track.accent : "var(--border-color)",
                 }}
               />
             ))}
