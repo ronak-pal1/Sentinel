@@ -1,7 +1,15 @@
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #EEB355;
+}
+
 :root {
+ 
+  --background-color: #FFFDF3;
+
   
+  background-color: var(--background-color);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -12,3 +20,11 @@ body {
   margin: 0;
 }
 
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
