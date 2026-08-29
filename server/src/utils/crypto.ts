@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { env } from '../config/env';
 
 const ALGORITHM = 'aes-256-gcm';
@@ -36,6 +36,19 @@ export function decryptSecret(payload: string): string {
   const decipher = createDecipheriv(ALGORITHM, getKey(), iv);
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+}
+
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+export function verifyTokenHash(token: string, tokenHash: string): boolean {
+  const expected = Buffer.from(hashToken(token), 'hex');
+  const actual = Buffer.from(tokenHash, 'hex');
+  if (expected.length !== actual.length) {
+    return false;
+  }
+  return timingSafeEqual(expected, actual);
 }
 
 export function maskApiKey(key: string): string {

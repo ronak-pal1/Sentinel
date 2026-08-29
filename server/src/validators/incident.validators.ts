@@ -19,6 +19,7 @@ export const listIncidentsQuerySchema = z.object({
 
 export const eventsQuerySchema = z.object({
   since: z.string().min(1).optional(),
+  afterId: z.string().optional(),
 });
 
 export const breakItBodySchema = z

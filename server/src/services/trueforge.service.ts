@@ -87,15 +87,17 @@ export async function runTurnStream(sessionId: string, input: TurnInput) {
 export async function subscribeToTurn(
   sessionId: string,
   turnId: string,
-  afterSequenceNumber?: number,
+  options?: { afterSequenceNumber?: number; signal?: AbortSignal },
 ) {
   const tf = getTrueForgeClient();
-  if (afterSequenceNumber !== undefined) {
-    return tf.sessions.subscribeToTurn(sessionId, turnId, {
-      afterSequenceNumber,
-    });
+  const params: { afterSequenceNumber?: number; signal?: AbortSignal } = {};
+  if (options?.afterSequenceNumber !== undefined) {
+    params.afterSequenceNumber = options.afterSequenceNumber;
   }
-  return tf.sessions.subscribeToTurn(sessionId, turnId, {});
+  if (options?.signal !== undefined) {
+    params.signal = options.signal;
+  }
+  return tf.sessions.subscribeToTurn(sessionId, turnId, params);
 }
 
 export async function submitApproval(

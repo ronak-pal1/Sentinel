@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { asyncHandler } from '../middleware/asyncHandler';
+import * as agentSessionService from '../services/agentSession.service';
 import * as trueforge from '../services/trueforge.service';
 import { AppError } from '../utils/AppError';
 import { logger } from '../utils/logger';
@@ -14,6 +15,7 @@ export const getAgentStatus = asyncHandler(async (_req: Request, res: Response) 
 });
 
 export const createAgentSession = asyncHandler(async (req: Request, res: Response) => {
+  const profileId = req.profileId!;
   const { title, incidentId } = req.body as {
     title?: string;
     incidentId?: string;
@@ -21,6 +23,11 @@ export const createAgentSession = asyncHandler(async (req: Request, res: Respons
   try {
     const session = await trueforge.createSession({
       ...(title ? { title } : {}),
+      ...(incidentId ? { incidentId } : {}),
+    });
+    await agentSessionService.registerAgentSession({
+      sessionId: session.id,
+      profileId,
       ...(incidentId ? { incidentId } : {}),
     });
     res.status(StatusCodes.CREATED).json({ success: true, data: session });
@@ -35,6 +42,7 @@ export const createAgentSession = asyncHandler(async (req: Request, res: Respons
 
 export const getAgentSession = asyncHandler(async (req: Request, res: Response) => {
   const { sessionId } = req.params as { sessionId: string };
+  await agentSessionService.assertAgentSessionOwnership(sessionId, req.profileId!);
   try {
     const session = await trueforge.getSession(sessionId);
     res.status(StatusCodes.OK).json({ success: true, data: session });
@@ -48,6 +56,7 @@ export const getAgentSession = asyncHandler(async (req: Request, res: Response) 
 
 export const createAgentTurn = asyncHandler(async (req: Request, res: Response) => {
   const { sessionId } = req.params as { sessionId: string };
+  await agentSessionService.assertAgentSessionOwnership(sessionId, req.profileId!);
   const body = req.body as {
     message?: string;
     input?: { type: string; [key: string]: unknown }[];
@@ -70,6 +79,7 @@ export const createAgentTurn = asyncHandler(async (req: Request, res: Response) 
 
 export const streamAgentTurn = asyncHandler(async (req: Request, res: Response) => {
   const { sessionId, turnId } = req.params as { sessionId: string; turnId: string };
+  await agentSessionService.assertAgentSessionOwnership(sessionId, req.profileId!);
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -77,32 +87,66 @@ export const streamAgentTurn = asyncHandler(async (req: Request, res: Response) 
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders?.();
 
-  try {
-    const stream = await trueforge.subscribeToTurn(sessionId, turnId);
-    for await (const event of stream) {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
+  let closed = false;
+  const abortController = new AbortController();
+
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    abortController.abort();
+  };
+
+  req.on('close', cleanup);
+  res.on('close', cleanup);
+
+  const writeSse = (chunk: string): boolean => {
+    if (closed || res.writableEnded || res.destroyed) {
+      return false;
     }
-    res.write('event: done\ndata: {}\n\n');
-    res.end();
+    res.write(chunk);
+    return true;
+  };
+
+  let stream:
+    | (AsyncIterable<unknown> & { return?: () => Promise<unknown> })
+    | undefined;
+
+  try {
+    stream = await trueforge.subscribeToTurn(sessionId, turnId, {
+      signal: abortController.signal,
+    });
+    for await (const event of stream) {
+      if (closed) break;
+      if (!writeSse(`data: ${JSON.stringify(event)}\n\n`)) break;
+    }
+    if (!closed) {
+      writeSse('event: done\ndata: {}\n\n');
+      res.end();
+    }
   } catch (err) {
     logger.error('streamAgentTurn failed', err);
-    if (!res.headersSent) {
+    if (!closed && !res.writableEnded) {
+      writeSse(
+        `event: error\ndata: ${JSON.stringify({
+          message: err instanceof Error ? err.message : 'stream error',
+        })}\n\n`,
+      );
+      res.end();
+    } else if (!res.headersSent) {
       throw new AppError(
         err instanceof Error ? err.message : 'Failed to stream turn',
         StatusCodes.BAD_GATEWAY,
       );
     }
-    res.write(
-      `event: error\ndata: ${JSON.stringify({
-        message: err instanceof Error ? err.message : 'stream error',
-      })}\n\n`,
-    );
-    res.end();
+  } finally {
+    cleanup();
+    await stream?.return?.();
   }
 });
 
 export const submitAgentApproval = asyncHandler(async (req: Request, res: Response) => {
   const { sessionId } = req.params as { sessionId: string };
+  await agentSessionService.assertAgentSessionOwnership(sessionId, req.profileId!);
   const body = req.body as {
     toolCallId: string;
     threadId: string;

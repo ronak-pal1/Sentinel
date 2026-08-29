@@ -6,9 +6,10 @@ import { createIncidentId } from '../utils/ids';
 import { logger } from '../utils/logger';
 import * as eventService from './event.service';
 import * as metricsService from './metrics.service';
+import * as agentSessionService from './agentSession.service';
 import * as trueforge from './trueforge.service';
 
-function toPublicIncident(incident: IncidentAttrs): IncidentAttrs {
+function toPublicIncident(incident: IncidentAttrs): Omit<IncidentAttrs, 'profileId'> {
   return {
     id: incident.id,
     service: incident.service,
@@ -42,19 +43,24 @@ function toPublicIncident(incident: IncidentAttrs): IncidentAttrs {
   };
 }
 
-async function getIncidentOrThrow(id: string): Promise<IncidentAttrs> {
-  const incident = await Incident.findOne({ id }).lean<IncidentAttrs>();
+async function getIncidentOrThrow(
+  id: string,
+  profileId: string,
+): Promise<IncidentAttrs> {
+  const incident = await Incident.findOne({ id, profileId }).lean<IncidentAttrs>();
   if (!incident) {
     throw new AppError(`Incident not found: ${id}`, StatusCodes.NOT_FOUND);
   }
   return incident;
 }
 
-export async function listIncidents(filters: {
+export async function listIncidents(
+  profileId: string,
+  filters: {
   active?: boolean;
   phase?: IncidentPhase;
-}): Promise<IncidentAttrs[]> {
-  const query: Record<string, unknown> = {};
+}): Promise<Omit<IncidentAttrs, 'profileId'>[]> {
+  const query: Record<string, unknown> = { profileId };
   if (filters.phase) {
     query.phase = filters.phase;
   } else if (filters.active === true) {
@@ -69,8 +75,11 @@ export async function listIncidents(filters: {
   return incidents.map(toPublicIncident);
 }
 
-export async function getIncident(id: string): Promise<IncidentAttrs> {
-  return toPublicIncident(await getIncidentOrThrow(id));
+export async function getIncident(
+  id: string,
+  profileId: string,
+): Promise<Omit<IncidentAttrs, 'profileId'>> {
+  return toPublicIncident(await getIncidentOrThrow(id, profileId));
 }
 
 async function seedInitialTelemetry(incidentId: string, degraded: boolean) {
@@ -205,11 +214,14 @@ async function consumeAgentStream(
   }
 }
 
-export async function breakIt(input: {
+export async function breakIt(
+  profileId: string,
+  input: {
   service: string;
   alertType: string;
-}): Promise<IncidentAttrs> {
+}): Promise<Omit<IncidentAttrs, 'profileId'>> {
   const existing = await Incident.findOne({
+    profileId,
     phase: { $in: [...ACTIVE_PHASES] },
   }).lean<IncidentAttrs>();
   if (existing) {
@@ -224,6 +236,7 @@ export async function breakIt(input: {
 
   const incident = await Incident.create({
     id,
+    profileId,
     service: input.service,
     alertType: input.alertType,
     phase: 'alert',
@@ -249,6 +262,11 @@ export async function breakIt(input: {
     });
     sessionId = session.id;
     await Incident.updateOne({ id }, { $set: { trueforgeSessionId: sessionId } });
+    await agentSessionService.registerAgentSession({
+      sessionId,
+      profileId,
+      incidentId: id,
+    });
   } catch (err) {
     logger.warn('Could not create TrueForge session', err);
     await eventService.appendEvent({
@@ -276,9 +294,10 @@ export async function breakIt(input: {
 
 export async function approveIncident(
   id: string,
+  profileId: string,
   approvedBy: string,
-): Promise<IncidentAttrs> {
-  const incident = await getIncidentOrThrow(id);
+): Promise<Omit<IncidentAttrs, 'profileId'>> {
+  const incident = await getIncidentOrThrow(id, profileId);
   if (incident.phase !== 'awaiting_approval' && incident.phase !== 'pr_opened') {
     throw new AppError(
       `Incident ${id} is not awaiting approval (phase=${incident.phase})`,
@@ -320,14 +339,15 @@ export async function approveIncident(
     phase: 'resolved',
   });
 
-  return getIncident(id);
+  return getIncident(id, profileId);
 }
 
 export async function rejectIncident(
   id: string,
+  profileId: string,
   reason?: string,
-): Promise<IncidentAttrs> {
-  const incident = await getIncidentOrThrow(id);
+): Promise<Omit<IncidentAttrs, 'profileId'>> {
+  const incident = await getIncidentOrThrow(id, profileId);
   if (TERMINAL_PHASES.has(incident.phase)) {
     throw new AppError(`Incident ${id} is already terminal`, StatusCodes.CONFLICT);
   }
@@ -365,11 +385,14 @@ export async function rejectIncident(
     phase: 'rejected',
   });
 
-  return getIncident(id);
+  return getIncident(id, profileId);
 }
 
-export async function retryIncident(id: string): Promise<IncidentAttrs> {
-  const incident = await getIncidentOrThrow(id);
+export async function retryIncident(
+  id: string,
+  profileId: string,
+): Promise<Omit<IncidentAttrs, 'profileId'>> {
+  const incident = await getIncidentOrThrow(id, profileId);
   if (!['rejected', 'investigating', 'awaiting_approval'].includes(incident.phase)) {
     throw new AppError(
       `Cannot retry incident in phase ${incident.phase}`,
@@ -407,6 +430,11 @@ export async function retryIncident(id: string): Promise<IncidentAttrs> {
       });
       sessionId = session.id;
       await Incident.updateOne({ id }, { $set: { trueforgeSessionId: sessionId } });
+      await agentSessionService.registerAgentSession({
+        sessionId,
+        profileId,
+        incidentId: id,
+      });
     } catch (err) {
       logger.warn('Retry session create failed', err);
     }
@@ -417,11 +445,14 @@ export async function retryIncident(id: string): Promise<IncidentAttrs> {
     void consumeAgentStream(id, sessionId, prompt);
   }
 
-  return getIncident(id);
+  return getIncident(id, profileId);
 }
 
-export async function escalateIncident(id: string): Promise<IncidentAttrs> {
-  await getIncidentOrThrow(id);
+export async function escalateIncident(
+  id: string,
+  profileId: string,
+): Promise<Omit<IncidentAttrs, 'profileId'>> {
+  await getIncidentOrThrow(id, profileId);
   await Incident.updateOne(
     { id },
     {
@@ -439,11 +470,14 @@ export async function escalateIncident(id: string): Promise<IncidentAttrs> {
     message: 'Escalated to on-call',
     phase: 'escalated',
   });
-  return getIncident(id);
+  return getIncident(id, profileId);
 }
 
-export async function closeIncident(id: string): Promise<IncidentAttrs> {
-  await getIncidentOrThrow(id);
+export async function closeIncident(
+  id: string,
+  profileId: string,
+): Promise<Omit<IncidentAttrs, 'profileId'>> {
+  await getIncidentOrThrow(id, profileId);
   await Incident.updateOne(
     { id },
     {
@@ -461,12 +495,12 @@ export async function closeIncident(id: string): Promise<IncidentAttrs> {
     message: 'Incident closed without merge',
     phase: 'rejected',
   });
-  return getIncident(id);
+  return getIncident(id, profileId);
 }
 
-export async function getPostmortem(id: string) {
-  const incident = await getIncident(id);
-  const events = await eventService.listEvents(id);
+export async function getPostmortem(id: string, profileId: string) {
+  const incident = await getIncident(id, profileId);
+  const events = await eventService.listEvents(id, profileId);
   const startedAt = new Date(incident.startedAt).getTime();
   const resolvedAt = incident.resolvedAt
     ? new Date(incident.resolvedAt).getTime()

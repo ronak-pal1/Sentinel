@@ -1,7 +1,10 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { IncidentProvider } from "../lib/IncidentStore";
+import { useProfile } from "../lib/ProfileContext";
 
 const AppShell = () => {
+  const { profile } = useProfile();
+
   return (
     <IncidentProvider>
       <div className="font-sans text-(--foreground-color)">
@@ -34,6 +37,11 @@ const AppShell = () => {
             >
               Settings
             </NavLink>
+            {profile ? (
+              <span className="ml-auto text-[11px] font-mono text-(--muted-color)">
+                {profile.displayName}
+              </span>
+            ) : null}
           </nav>
         </div>
         <Outlet />

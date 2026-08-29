@@ -6,6 +6,7 @@ import * as eventService from '../services/event.service';
 import * as metricsService from '../services/metrics.service';
 
 export const listIncidents = asyncHandler(async (req: Request, res: Response) => {
+  const profileId = req.profileId!;
   const query = req.query as {
     active?: boolean;
     phase?:
@@ -20,7 +21,7 @@ export const listIncidents = asyncHandler(async (req: Request, res: Response) =>
       | 'escalated';
   };
 
-  const filters: Parameters<typeof incidentService.listIncidents>[0] = {};
+  const filters: Parameters<typeof incidentService.listIncidents>[1] = {};
   if (query.active !== undefined) {
     filters.active = query.active;
   }
@@ -28,77 +29,78 @@ export const listIncidents = asyncHandler(async (req: Request, res: Response) =>
     filters.phase = query.phase;
   }
 
-  const data = await incidentService.listIncidents(filters);
+  const data = await incidentService.listIncidents(profileId, filters);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const getIncident = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  const data = await incidentService.getIncident(id);
+  const data = await incidentService.getIncident(id, req.profileId!);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const breakIt = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as { service: string; alertType: string };
-  const data = await incidentService.breakIt(body);
+  const data = await incidentService.breakIt(req.profileId!, body);
   res.status(StatusCodes.CREATED).json({ success: true, data });
 });
 
 export const approveIncident = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
   const { approvedBy } = req.body as { approvedBy: string };
-  const data = await incidentService.approveIncident(id, approvedBy);
+  const data = await incidentService.approveIncident(id, req.profileId!, approvedBy);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const rejectIncident = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
   const { reason } = req.body as { reason?: string };
-  const data = await incidentService.rejectIncident(id, reason);
+  const data = await incidentService.rejectIncident(id, req.profileId!, reason);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const retryIncident = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  const data = await incidentService.retryIncident(id);
+  const data = await incidentService.retryIncident(id, req.profileId!);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const escalateIncident = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  const data = await incidentService.escalateIncident(id);
+  const data = await incidentService.escalateIncident(id, req.profileId!);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const closeIncident = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  const data = await incidentService.closeIncident(id);
+  const data = await incidentService.closeIncident(id, req.profileId!);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const listIncidentEvents = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  const { since } = req.query as { since?: string };
-  await incidentService.getIncident(id);
-  const data = await eventService.listEvents(id, since);
+  const { since, afterId } = req.query as { since?: string; afterId?: string };
+  const cursor =
+    since !== undefined
+      ? { timestamp: since, id: afterId ?? '' }
+      : undefined;
+  const data = await eventService.listEvents(id, req.profileId!, cursor);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const streamIncidentEvents = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  await incidentService.getIncident(id);
-  eventService.streamIncidentEvents(id, res);
+  eventService.streamIncidentEvents(id, req.profileId!, res);
 });
 
 export const getIncidentMetrics = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  await incidentService.getIncident(id);
-  const data = await metricsService.getIncidentMetrics(id);
+  const data = await metricsService.getIncidentMetrics(id, req.profileId!);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
 
 export const getPostmortem = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
-  const data = await incidentService.getPostmortem(id);
+  const data = await incidentService.getPostmortem(id, req.profileId!);
   res.status(StatusCodes.OK).json({ success: true, data });
 });

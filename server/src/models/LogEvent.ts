@@ -34,7 +34,7 @@ const logEventSchema = new Schema<LogEventAttrs>(
   },
 );
 
-logEventSchema.index({ incidentId: 1, timestamp: 1 });
+logEventSchema.index({ incidentId: 1, timestamp: 1, id: 1 });
 
 export const LogEvent: Model<LogEventAttrs> = model<LogEventAttrs>(
   'LogEvent',

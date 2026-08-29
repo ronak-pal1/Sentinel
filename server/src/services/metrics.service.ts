@@ -1,8 +1,21 @@
+import { StatusCodes } from 'http-status-codes';
 import { MetricPoint, type MetricPointAttrs } from '../models/MetricPoint';
 import { Incident, type IncidentAttrs } from '../models/Incident';
 import { ACTIVE_PHASES, type SystemHealthStatus } from '../types/domain';
+import { AppError } from '../utils/AppError';
 
-export async function getIncidentMetrics(incidentId: string) {
+async function assertIncidentOwnership(
+  incidentId: string,
+  profileId: string,
+): Promise<void> {
+  const incident = await Incident.findOne({ id: incidentId, profileId }).lean();
+  if (!incident) {
+    throw new AppError(`Incident not found: ${incidentId}`, StatusCodes.NOT_FOUND);
+  }
+}
+
+export async function getIncidentMetrics(incidentId: string, profileId: string) {
+  await assertIncidentOwnership(incidentId, profileId);
   const points = await MetricPoint.find({ incidentId })
     .sort({ t: 1 })
     .lean<MetricPointAttrs[]>();

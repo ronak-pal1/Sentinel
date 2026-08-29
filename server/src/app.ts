@@ -19,6 +19,7 @@ export function createApp(): Express {
     cors({
       origin: env.CLIENT_ORIGIN,
       credentials: true,
+      allowedHeaders: ['Content-Type', 'X-Profile-Id', 'X-Profile-Token'],
     }),
   );
 

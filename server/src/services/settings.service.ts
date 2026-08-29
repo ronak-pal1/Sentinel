@@ -21,11 +21,11 @@ export type PublicSettings = {
   modelApiKeyMasked: string | null;
 };
 
-async function ensureSettings() {
-  let doc = await Settings.findOne({ key: 'default' });
+async function ensureSettings(profileId: string) {
+  let doc = await Settings.findOne({ profileId });
   if (!doc) {
     doc = await Settings.create({
-      key: 'default',
+      profileId,
       connectors: [...DEFAULT_CONNECTORS],
       sandboxLimits: { ...DEFAULT_SANDBOX_LIMITS },
     });
@@ -61,22 +61,25 @@ function toPublic(doc: SettingsAttrs): PublicSettings {
   };
 }
 
-export async function getSettings(): Promise<PublicSettings> {
-  const doc = await ensureSettings();
+export async function getSettings(profileId: string): Promise<PublicSettings> {
+  const doc = await ensureSettings(profileId);
   return toPublic(doc.toObject());
 }
 
-export async function updateSettings(input: {
-  modelApiKey?: string;
-  clearModelApiKey?: boolean;
-  sandboxLimits?: {
-    maxReplay?: number;
-    timeoutSec?: number;
-    isolation?: string;
-    network?: string;
-  };
-}): Promise<PublicSettings> {
-  const doc = await ensureSettings();
+export async function updateSettings(
+  profileId: string,
+  input: {
+    modelApiKey?: string;
+    clearModelApiKey?: boolean;
+    sandboxLimits?: {
+      maxReplay?: number;
+      timeoutSec?: number;
+      isolation?: string;
+      network?: string;
+    };
+  },
+): Promise<PublicSettings> {
+  const doc = await ensureSettings(profileId);
 
   if (input.clearModelApiKey) {
     doc.set('modelApiKeyEncrypted', undefined);
@@ -104,13 +107,13 @@ export async function updateSettings(input: {
   return toPublic(doc.toObject());
 }
 
-export async function listConnectors() {
-  const settings = await getSettings();
+export async function listConnectors(profileId: string) {
+  const settings = await getSettings(profileId);
   return settings.connectors;
 }
 
-export async function testConnector(name: string) {
-  const settings = await getSettings();
+export async function testConnector(profileId: string, name: string) {
+  const settings = await getSettings(profileId);
   const connector = settings.connectors.find(
     (c) => c.name.toLowerCase() === name.toLowerCase(),
   );
