@@ -3,7 +3,8 @@ import { FiAlertCircle } from "react-icons/fi";
 import { MetricsSparkline } from "../../components/dashboard/MetricsSparkline";
 import { PhaseStepper } from "../../components/dashboard/PhaseStepper";
 import { StatusPill } from "../../components/dashboard/StatusPill";
-import { useIncidents } from "../../lib/IncidentStore";
+import { useIncidents } from "../../lib/incidents/context";
+import { useProfile } from "../../lib/ProfileContext";
 import { PHASE_LABELS } from "../../lib/types";
 
 function formatDuration(start: string, end?: string) {
@@ -17,6 +18,8 @@ function formatDuration(start: string, end?: string) {
 
 export default function IncidentsOverview() {
   const { state, breakIt, systemHealth } = useIncidents();
+  const { mode } = useProfile();
+  const isReal = mode === "real";
   const navigate = useNavigate();
   const active = state.activeIncidentId
     ? state.incidents.find((i) => i.id === state.activeIncidentId)
@@ -40,18 +43,28 @@ export default function IncidentsOverview() {
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">Incidents</h1>
           <p className="mt-2 text-(--muted-color) text-sm max-w-lg">
-            Trigger a synthetic failure and watch the agent investigate,
-            sandbox-verify, open a PR, and wait for your approval.
+            {isReal
+              ? "Incidents are created when your alert webhook fires. Connect GitHub and create a webhook to get started."
+              : "Trigger a synthetic failure and watch the agent investigate, sandbox-verify, open a PR, and wait for your approval."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onBreakIt}
-          disabled={!!state.activeIncidentId}
-          className="shrink-0 w-full sm:w-auto bg-[#C9736B] hover:bg-[#b8625a] disabled:bg-(--border-color) disabled:text-(--muted-color) text-white font-semibold px-6 py-3.5 text-sm transition-colors disabled:cursor-not-allowed"
-        >
-          Break It
-        </button>
+        {!isReal ? (
+          <button
+            type="button"
+            onClick={onBreakIt}
+            disabled={!!state.activeIncidentId}
+            className="shrink-0 w-full sm:w-auto bg-[#C9736B] hover:bg-[#b8625a] disabled:bg-(--border-color) disabled:text-(--muted-color) text-white font-semibold px-6 py-3.5 text-sm transition-colors disabled:cursor-not-allowed"
+          >
+            Break It
+          </button>
+        ) : (
+          <Link
+            to="/app/webhooks"
+            className="shrink-0 w-full sm:w-auto text-center bg-primary hover:bg-[#e0a240] text-black font-semibold px-6 py-3.5 text-sm transition-colors"
+          >
+            Manage webhooks
+          </Link>
+        )}
       </div>
 
       <div className="border border-(--border-color) bg-(--surface-color) px-5 py-4 mb-8">
@@ -110,17 +123,40 @@ export default function IncidentsOverview() {
           <FiAlertCircle className="w-8 h-8 text-(--muted-color) mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">No incidents yet</h2>
           <p className="text-(--muted-color) text-sm max-w-md mx-auto mb-6">
-            Click <span className="font-medium text-(--foreground-color)">Break It</span> to
-            inject a synthetic failure into checkout-svc. The agent will
-            investigate, verify a fix in sandbox, open a PR, and wait for you.
+            {isReal ? (
+              <>
+                Waiting for webhook alerts. Create a webhook in{" "}
+                <Link to="/app/webhooks" className="text-[#B8791F] hover:underline">
+                  Webhooks
+                </Link>{" "}
+                and POST an alert payload with your secret header.
+              </>
+            ) : (
+              <>
+                Click{" "}
+                <span className="font-medium text-(--foreground-color)">
+                  Break It
+                </span>{" "}
+                to inject a synthetic failure into checkout-svc.
+              </>
+            )}
           </p>
-          <button
-            type="button"
-            onClick={onBreakIt}
-            className="bg-[#C9736B] hover:bg-[#b8625a] text-white font-semibold px-6 py-3 text-sm transition-colors"
-          >
-            Break It
-          </button>
+          {!isReal ? (
+            <button
+              type="button"
+              onClick={onBreakIt}
+              className="bg-[#C9736B] hover:bg-[#b8625a] text-white font-semibold px-6 py-3 text-sm transition-colors"
+            >
+              Break It
+            </button>
+          ) : (
+            <Link
+              to="/app/webhooks"
+              className="inline-block bg-primary hover:bg-[#e0a240] text-black font-semibold px-6 py-3 text-sm"
+            >
+              Create webhook
+            </Link>
+          )}
         </div>
       )}
 

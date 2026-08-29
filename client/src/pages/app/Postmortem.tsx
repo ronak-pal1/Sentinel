@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { FiCheck, FiCopy, FiExternalLink } from "react-icons/fi";
-import { useIncidents } from "../../lib/IncidentStore";
+import { useIncidents } from "../../lib/incidents/context";
+import type { LogEvent } from "../../lib/types";
 
 function buildMarkdown(opts: {
   id: string;
@@ -80,7 +81,7 @@ export default function Postmortem() {
     },
     incident.rootCause
       ? {
-          t: logs.find((l) => l.phase === "root_cause_found")?.timestamp ??
+          t: logs.find((l: LogEvent) => l.phase === "root_cause_found")?.timestamp ??
             incident.startedAt,
           text: `Agent found root cause: ${incident.rootCause}.`,
         }
@@ -88,8 +89,10 @@ export default function Postmortem() {
     incident.sandboxResult
       ? {
           t:
-            logs.find((l) => l.phase === "sandbox_verifying" && l.type === "success")
-              ?.timestamp ?? incident.startedAt,
+            logs.find(
+              (l: LogEvent) =>
+                l.phase === "sandbox_verifying" && l.type === "success",
+            )?.timestamp ?? incident.startedAt,
           text: `Fix verified in sandbox — latency ${incident.sandboxResult.latencyMs}ms, ${incident.sandboxResult.errorRate} errors in ${incident.sandboxResult.requestsReplayed} replayed requests.`,
         }
       : null,

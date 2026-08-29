@@ -10,7 +10,7 @@ import { InvestigationGraph } from "../../components/dashboard/InvestigationGrap
 import { MetricsSparkline } from "../../components/dashboard/MetricsSparkline";
 import { PhaseStepper } from "../../components/dashboard/PhaseStepper";
 import { StatusPill } from "../../components/dashboard/StatusPill";
-import { useIncidents } from "../../lib/IncidentStore";
+import { useIncidents } from "../../lib/incidents/context";
 import type { IncidentPhase } from "../../lib/types";
 
 export default function IncidentDetail() {

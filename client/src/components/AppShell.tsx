@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { IncidentProvider } from "../lib/IncidentStore";
+import { IncidentProvider } from "../lib/incidents/IncidentProvider";
 import { useProfile } from "../lib/ProfileContext";
 
 const AppShell = () => {
-  const { profile } = useProfile();
+  const { profile, mode } = useProfile();
+  const isReal = mode === "real";
 
   return (
     <IncidentProvider>
@@ -24,6 +25,36 @@ const AppShell = () => {
             >
               Incidents
             </NavLink>
+            {isReal ? (
+              <>
+                <NavLink
+                  to="/app/webhooks"
+                  className={({ isActive }) =>
+                    [
+                      "px-3 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "text-(--foreground-color) border-b-2 border-primary"
+                        : "text-(--muted-color) hover:text-(--foreground-color)",
+                    ].join(" ")
+                  }
+                >
+                  Webhooks
+                </NavLink>
+                <NavLink
+                  to="/app/pulls"
+                  className={({ isActive }) =>
+                    [
+                      "px-3 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "text-(--foreground-color) border-b-2 border-primary"
+                        : "text-(--muted-color) hover:text-(--foreground-color)",
+                    ].join(" ")
+                  }
+                >
+                  Pull Requests
+                </NavLink>
+              </>
+            ) : null}
             <NavLink
               to="/app/settings"
               className={({ isActive }) =>
@@ -38,7 +69,16 @@ const AppShell = () => {
               Settings
             </NavLink>
             {profile ? (
-              <span className="ml-auto text-[11px] font-mono text-(--muted-color)">
+              <span className="ml-auto flex items-center gap-2 text-[11px] font-mono text-(--muted-color)">
+                <span
+                  className={
+                    isReal
+                      ? "text-[#B8791F] border border-[#EDA53B] px-1.5 py-0.5"
+                      : "border border-(--border-color) px-1.5 py-0.5"
+                  }
+                >
+                  {isReal ? "REAL" : "DEMO"}
+                </span>
                 {profile.displayName}
               </span>
             ) : null}
