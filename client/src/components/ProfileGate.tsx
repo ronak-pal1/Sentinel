@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { ProfileProvider, useProfile } from "../lib/ProfileContext";
+import ModeSelection from "../pages/app/ModeSelection";
 import Onboarding from "../pages/app/Onboarding";
 
 function ProfileGateInner({ children }: { children: ReactNode }) {
-  const { profile, loading } = useProfile();
+  const { profile, loading, mode } = useProfile();
 
   if (loading) {
     return (
@@ -15,6 +16,10 @@ function ProfileGateInner({ children }: { children: ReactNode }) {
 
   if (!profile) {
     return <Onboarding />;
+  }
+
+  if (!mode) {
+    return <ModeSelection />;
   }
 
   return <>{children}</>;

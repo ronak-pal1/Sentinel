@@ -24,6 +24,7 @@ export default function Onboarding() {
         id: created.id,
         token: created.token,
         displayName: created.displayName,
+        mode: created.mode ?? null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create profile");

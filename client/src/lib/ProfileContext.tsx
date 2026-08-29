@@ -12,12 +12,14 @@ import {
   clearProfile,
   getStoredProfile,
   saveProfile,
+  type ProfileMode,
   type StoredProfile,
 } from "./profile";
 
 type ProfileContextValue = {
   profile: StoredProfile | null;
   loading: boolean;
+  mode: ProfileMode | null;
   setProfile: (profile: StoredProfile) => void;
   clearProfile: () => void;
 };
@@ -45,6 +47,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           id: remote.id,
           token: stored.token,
           displayName: remote.displayName,
+          mode: remote.mode,
         };
         saveProfile(next);
         setProfileState(next);
@@ -75,14 +78,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  const mode = profile?.mode ?? null;
+
   const value = useMemo(
     () => ({
       profile,
       loading,
+      mode,
       setProfile,
       clearProfile: handleClearProfile,
     }),
-    [profile, loading, setProfile, handleClearProfile],
+    [profile, loading, mode, setProfile, handleClearProfile],
   );
 
   return (
