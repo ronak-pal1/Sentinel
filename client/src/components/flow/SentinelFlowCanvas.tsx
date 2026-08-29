@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -46,6 +46,7 @@ function FlowInner({
   minHeight = "14rem",
   onNodeClick,
 }: SentinelFlowCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const { fitView } = useReactFlow();
 
   const preparedNodes = useMemo(() => {
@@ -77,12 +78,27 @@ function FlowInner({
     setNodes(preparedNodes);
   }, [preparedNodes, setNodes]);
 
+  const fitToView = useCallback(() => {
+    fitView({ padding: 0.12, maxZoom: 1 });
+  }, [fitView]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      fitView({ padding: 0.15, maxZoom: 1 });
+      fitToView();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [fitView]);
+  }, [fitToView, preparedNodes, inputEdges, phase]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver(() => {
+      fitToView();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fitToView]);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -120,31 +136,34 @@ function FlowInner({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <div style={{ width: "100%", minWidth: 860, height: minHeight }}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeClick={handleNodeClick}
-            nodeTypes={sentinelNodeTypes}
-            edgeTypes={sentinelEdgeTypes}
-            defaultEdgeOptions={sentinelDefaultEdgeOptions}
-            nodesDraggable={draggable}
-            nodesConnectable={false}
-            elementsSelectable={interactive}
-            panOnDrag={false}
-            panOnScroll
-            zoomOnScroll={false}
-            zoomOnPinch={false}
-            zoomOnDoubleClick={false}
-            preventScrolling={false}
-            minZoom={0.5}
-            maxZoom={1}
-            proOptions={{ hideAttribution: true }}
-          />
-        </div>
+      <div
+        ref={containerRef}
+        className="w-full"
+        style={{ height: minHeight }}
+      >
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={handleNodeClick}
+          nodeTypes={sentinelNodeTypes}
+          edgeTypes={sentinelEdgeTypes}
+          defaultEdgeOptions={sentinelDefaultEdgeOptions}
+          nodesDraggable={draggable}
+          nodesConnectable={false}
+          elementsSelectable={interactive}
+          panOnDrag={false}
+          panOnScroll
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          zoomOnDoubleClick={false}
+          preventScrolling={false}
+          minZoom={0.2}
+          maxZoom={1}
+          style={{ width: "100%", height: "100%" }}
+          proOptions={{ hideAttribution: true }}
+        />
       </div>
     </div>
   );
