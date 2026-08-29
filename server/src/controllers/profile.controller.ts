@@ -13,3 +13,9 @@ export const getMyProfile = asyncHandler(async (req: Request, res: Response) => 
   const data = await profileService.getProfileById(req.profileId!);
   res.status(StatusCodes.OK).json({ success: true, data });
 });
+
+export const setProfileMode = asyncHandler(async (req: Request, res: Response) => {
+  const { mode } = req.body as { mode: 'demo' | 'real' };
+  const data = await profileService.setProfileMode(req.profileId!, mode);
+  res.status(StatusCodes.OK).json({ success: true, data });
+});
