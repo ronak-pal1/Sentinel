@@ -1,17 +1,14 @@
 import type { TrueForge } from '@truefoundry/trueforge-sdk';
 import { TrueForge as TrueForgeClient, TrueForgeError } from '@truefoundry/trueforge-sdk';
 import { env } from '../config/env';
+import {
+  buildSentinelAgentManifest,
+} from '../constants/sentinelAgent';
 import { logger } from '../utils/logger';
 
 type TurnInput = NonNullable<
   Parameters<TrueForge['sessions']['createTurn']>[1]['input']
 >;
-
-const SENTINEL_INSTRUCTIONS = `You are Sentinel, an SRE incident-response agent.
-Investigate production alerts using available tools (metrics, logs, deploys, sandbox, GitHub).
-Be concise. Prefer read-only investigation first.
-When you propose a fix (PR / merge / redeploy), pause for human approval before mutating production.
-Always state root cause hypothesis and confidence when diagnosis is ready.`;
 
 let client: TrueForgeClient | undefined;
 
@@ -34,10 +31,7 @@ function buildAgentPayload() {
     return { name: env.TRUEFORGE_AGENT_NAME };
   }
   return {
-    spec: {
-      model: { name: env.TRUEFORGE_MODEL },
-      instructions: SENTINEL_INSTRUCTIONS,
-    },
+    spec: buildSentinelAgentManifest(env.TRUEFORGE_MODEL),
   };
 }
 
@@ -145,6 +139,37 @@ export async function healthCheck(): Promise<{
           : 'TrueForge unreachable';
     logger.warn('TrueForge health check failed', message);
     return { ok: false, baseUrl, message };
+  }
+}
+
+export async function sandboxHealthCheck(): Promise<{
+  ok: boolean;
+  message: string;
+}> {
+  try {
+    const tf = getTrueForgeClient();
+    const response = await tf.server.getCapabilities();
+    const enabled =
+      typeof response === 'object' &&
+      response &&
+      'data' in response &&
+      typeof (response as { data: unknown }).data === 'object' &&
+      (response as { data: { sandbox?: { enabled?: boolean } } }).data.sandbox
+        ?.enabled === true;
+    return {
+      ok: enabled,
+      message: enabled
+        ? 'Daytona sandbox provider configured in TrueForge'
+        : 'Configure Daytona under TrueForge Settings → Sandbox providers',
+    };
+  } catch (err) {
+    const message =
+      err instanceof TrueForgeError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : 'Could not check sandbox capability';
+    return { ok: false, message };
   }
 }
 

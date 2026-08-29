@@ -7,6 +7,7 @@ import {
 } from '../models/Settings';
 import { decryptSecret, encryptSecret, maskApiKey } from '../utils/crypto';
 import { AppError } from '../utils/AppError';
+import * as github from './github.service';
 import * as trueforge from './trueforge.service';
 
 export type PublicSettings = {
@@ -19,6 +20,8 @@ export type PublicSettings = {
   };
   hasApiKey: boolean;
   modelApiKeyMasked: string | null;
+  githubConnected: boolean;
+  githubUsername: string | null;
 };
 
 async function ensureSettings(profileId: string) {
@@ -58,6 +61,8 @@ function toPublic(doc: SettingsAttrs): PublicSettings {
     },
     hasApiKey: Boolean(encrypted),
     modelApiKeyMasked: masked,
+    githubConnected: Boolean(doc.githubTokenEncrypted),
+    githubUsername: doc.githubUsername ?? null,
   };
 }
 
@@ -125,10 +130,29 @@ export async function testConnector(profileId: string, name: string) {
 
   if (
     lower === 'trueforge' ||
-    lower === 'agent' ||
-    connector?.name.toLowerCase().includes('sandbox')
+    lower === 'agent'
   ) {
     const health = await trueforge.healthCheck();
+    return {
+      name: connector?.name ?? name,
+      ok: health.ok,
+      message: health.message,
+      detail: connector?.detail,
+    };
+  }
+
+  if (lower === 'github' || connector?.name.toLowerCase().includes('github')) {
+    const result = await github.testConnection(profileId);
+    return {
+      name: connector?.name ?? 'GitHub',
+      ok: result.ok,
+      message: result.message,
+      detail: connector?.detail,
+    };
+  }
+
+  if (connector?.name.toLowerCase().includes('sandbox')) {
+    const health = await trueforge.sandboxHealthCheck();
     return {
       name: connector?.name ?? name,
       ok: health.ok,

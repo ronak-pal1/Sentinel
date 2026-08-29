@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import * as eventService from './event.service';
 import * as metricsService from './metrics.service';
 import * as agentSessionService from './agentSession.service';
+import * as github from './github.service';
 import * as trueforge from './trueforge.service';
 
 function toPublicIncident(incident: IncidentAttrs): Omit<IncidentAttrs, 'profileId'> {
@@ -39,6 +40,18 @@ function toPublicIncident(incident: IncidentAttrs): Omit<IncidentAttrs, 'profile
       : {}),
     ...(incident.trueforgePendingApproval !== undefined
       ? { trueforgePendingApproval: incident.trueforgePendingApproval }
+      : {}),
+    ...(incident.source !== undefined ? { source: incident.source } : {}),
+    ...(incident.webhookId !== undefined ? { webhookId: incident.webhookId } : {}),
+    ...(incident.githubOwner !== undefined
+      ? { githubOwner: incident.githubOwner }
+      : {}),
+    ...(incident.githubRepo !== undefined ? { githubRepo: incident.githubRepo } : {}),
+    ...(incident.alertMessage !== undefined
+      ? { alertMessage: incident.alertMessage }
+      : {}),
+    ...(incident.proposedPatch !== undefined
+      ? { proposedPatch: incident.proposedPatch }
       : {}),
   };
 }
@@ -103,6 +116,9 @@ function mapEventToPhase(
   if (TERMINAL_PHASES.has(current)) return null;
   if (eventType === 'turn.created' && current === 'alert') return 'investigating';
   if (eventType === 'tool.approval_required') return 'awaiting_approval';
+  if (eventType === 'sandbox.created' && current !== 'awaiting_approval') {
+    return 'sandbox_verifying';
+  }
   if (eventType === 'model.message' && current === 'investigating') {
     return 'root_cause_found';
   }
@@ -150,7 +166,9 @@ async function consumeAgentStream(
             ? 'Agent turn completed'
             : type === 'tool.approval_required'
               ? 'Approval required for tool action'
-              : `Agent event: ${type}`;
+              : type === 'sandbox.created'
+                ? 'Daytona sandbox provisioned via TrueForge'
+                : `Agent event: ${type}`;
 
       await eventService.appendEvent({
         incidentId,
@@ -159,6 +177,16 @@ async function consumeAgentStream(
         message,
         ...(content !== undefined ? { detail: content } : {}),
       });
+
+      if (type === 'sandbox.created' && typeof event === 'object' && event) {
+        const sandboxId = (event as { sandbox_id?: string }).sandbox_id;
+        if (sandboxId) {
+          await Incident.updateOne(
+            { id: incidentId },
+            { $set: { daytonaSandboxId: sandboxId } },
+          );
+        }
+      }
 
       if (type === 'tool.approval_required' && typeof event === 'object' && event) {
         const ev = event as {
@@ -317,6 +345,47 @@ export async function approveIncident(
     }
   }
 
+  let prUrl = incident.prUrl;
+  let prNumber = incident.prNumber;
+  let diff = incident.diff ?? incident.proposedPatch;
+
+  if (
+    !prUrl &&
+    incident.proposedPatch &&
+    incident.githubOwner &&
+    incident.githubRepo
+  ) {
+    try {
+      const pr = await github.createPullRequest(profileId, {
+        owner: incident.githubOwner,
+        repo: incident.githubRepo,
+        title: `[Sentinel] Fix for ${incident.alertType} on ${incident.service}`,
+        body: `Automated fix proposed by Sentinel for incident ${id}.\n\nRoot cause: ${incident.rootCause ?? 'See investigation logs'}`,
+        patch: incident.proposedPatch,
+      });
+      prUrl = pr.prUrl;
+      prNumber = pr.prNumber;
+      diff = pr.diff;
+      await eventService.appendEvent({
+        incidentId: id,
+        type: 'success',
+        tool: 'github',
+        message: `PR #${prNumber} opened`,
+        detail: prUrl,
+        phase: 'pr_opened',
+      });
+    } catch (err) {
+      logger.error('Failed to create PR on approval', err);
+      await eventService.appendEvent({
+        incidentId: id,
+        type: 'failure',
+        tool: 'github',
+        message: 'Failed to open PR — incident marked resolved with proposed patch only',
+        detail: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  }
+
   const approvedAt = new Date().toISOString();
   await Incident.updateOne(
     { id },
@@ -327,6 +396,9 @@ export async function approveIncident(
         approvedAt,
         resolvedAt: approvedAt,
         resolvedBy: 'human',
+        ...(prUrl !== undefined ? { prUrl } : {}),
+        ...(prNumber !== undefined ? { prNumber } : {}),
+        ...(diff !== undefined ? { diff } : {}),
       },
       $unset: { trueforgePendingApproval: 1 },
     },
