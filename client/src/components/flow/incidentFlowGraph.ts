@@ -183,3 +183,140 @@ export function buildIncidentFlowGraph(): GraphDefinition {
 export function buildSection2FlowGraph(): GraphDefinition {
   return toGraph(section2Nodes, section2Edges);
 }
+
+const sandboxCapabilityNodes: Omit<SentinelNode, "type">[] = [
+  {
+    id: "patch",
+    position: { x: 40, y: 70 },
+    data: { label: "PATCH CONFIG", kind: "box", phase: "root_cause_found" },
+    style: { width: 130, height: 44 },
+  },
+  {
+    id: "clone",
+    position: { x: 200, y: 70 },
+    data: { label: "CLONE ENV", kind: "box", phase: "sandbox_verifying" },
+    style: { width: 120, height: 44 },
+  },
+  {
+    id: "replay",
+    position: { x: 350, y: 70 },
+    data: { label: "REPLAY TRAFFIC", kind: "box", phase: "sandbox_verifying" },
+    style: { width: 140, height: 44 },
+  },
+  {
+    id: "metrics",
+    position: { x: 520, y: 62 },
+    data: { label: "METRICS OK?", kind: "diamond", phase: "sandbox_verifying" },
+    style: { width: 130, height: 60 },
+  },
+  {
+    id: "ready",
+    position: { x: 690, y: 70 },
+    data: { label: "READY FOR PR", kind: "box", phase: "resolved" },
+    style: { width: 130, height: 44 },
+  },
+];
+
+const sandboxCapabilityEdges: Omit<SentinelEdge, "type">[] = [
+  { id: "e-patch-clone", source: "patch", target: "clone" },
+  { id: "e-clone-replay", source: "clone", target: "replay" },
+  { id: "e-replay-metrics", source: "replay", target: "metrics" },
+  {
+    id: "e-metrics-ready",
+    source: "metrics",
+    target: "ready",
+    sourceHandle: "right",
+    data: { label: "PASS" },
+  },
+];
+
+const prReviewCapabilityNodes: Omit<SentinelNode, "type">[] = [
+  {
+    id: "open-pr",
+    position: { x: 40, y: 70 },
+    data: { label: "OPEN PR", kind: "box", phase: "pr_opened" },
+    style: { width: 120, height: 44 },
+  },
+  {
+    id: "qodo-scan",
+    position: { x: 190, y: 70 },
+    data: { label: "QODO SCAN", kind: "box", phase: "pr_opened" },
+    style: { width: 120, height: 44 },
+  },
+  {
+    id: "comments",
+    position: { x: 340, y: 70 },
+    data: { label: "REVIEW COMMENTS", kind: "box", phase: "pr_opened" },
+    style: { width: 150, height: 44 },
+  },
+  {
+    id: "lgtm",
+    position: { x: 520, y: 70 },
+    data: { label: "LGTM", kind: "accent", phase: "awaiting_approval" },
+    style: { width: 110, height: 44 },
+  },
+];
+
+const prReviewCapabilityEdges: Omit<SentinelEdge, "type">[] = [
+  { id: "e-open-qodo", source: "open-pr", target: "qodo-scan" },
+  { id: "e-qodo-comments", source: "qodo-scan", target: "comments" },
+  { id: "e-comments-lgtm", source: "comments", target: "lgtm" },
+];
+
+const approvalCapabilityNodes: Omit<SentinelNode, "type">[] = [
+  {
+    id: "proposed",
+    position: { x: 40, y: 70 },
+    data: { label: "PROPOSED FIX", kind: "box", phase: "pr_opened" },
+    style: { width: 130, height: 44 },
+  },
+  {
+    id: "review-diff",
+    position: { x: 200, y: 70 },
+    data: { label: "REVIEW DIFF", kind: "box", phase: "awaiting_approval" },
+    style: { width: 130, height: 44 },
+  },
+  {
+    id: "approve-gate",
+    position: { x: 370, y: 62 },
+    data: { label: "APPROVE?", kind: "diamond", phase: "awaiting_approval" },
+    style: { width: 120, height: 60 },
+  },
+  {
+    id: "merge",
+    position: { x: 530, y: 70 },
+    data: { label: "MERGE", kind: "box", phase: "resolved" },
+    style: { width: 110, height: 44 },
+  },
+  {
+    id: "resolved-gate",
+    position: { x: 680, y: 70 },
+    data: { label: "RESOLVED", kind: "accent", phase: "resolved" },
+    style: { width: 120, height: 44 },
+  },
+];
+
+const approvalCapabilityEdges: Omit<SentinelEdge, "type">[] = [
+  { id: "e-proposed-review", source: "proposed", target: "review-diff" },
+  { id: "e-review-approve", source: "review-diff", target: "approve-gate" },
+  {
+    id: "e-approve-merge",
+    source: "approve-gate",
+    target: "merge",
+    sourceHandle: "right",
+    data: { label: "YES" },
+  },
+  { id: "e-merge-resolved", source: "merge", target: "resolved-gate" },
+];
+
+export function buildSandboxCapabilityGraph(): GraphDefinition {
+  return toGraph(sandboxCapabilityNodes, sandboxCapabilityEdges);
+}
+
+export function buildPrReviewCapabilityGraph(): GraphDefinition {
+  return toGraph(prReviewCapabilityNodes, prReviewCapabilityEdges);
+}
+
+export function buildApprovalCapabilityGraph(): GraphDefinition {
+  return toGraph(approvalCapabilityNodes, approvalCapabilityEdges);
+}

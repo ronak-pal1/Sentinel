@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { FiCircle, FiChevronRight } from "react-icons/fi";
+import { SentinelFlowCanvas } from "../components/flow";
 import {
-  SentinelFlowCanvas,
-  buildSection2FlowGraph,
-} from "../components/flow";
+  capabilityConfigs,
+  capabilitiesList,
+  type CapabilityId,
+} from "./section2Capabilities";
 
 const GRAPH_WIDTH = 820;
 
@@ -53,15 +55,17 @@ const logLines = [
 
 type DemoStatus = "idle" | "running" | "awaiting" | "resolved";
 
-const capabilities = [
-  { title: "Incident Flow", sub: "READ-ONLY · LIVE", active: true },
-  { title: "Sandbox Verify", sub: "ISOLATED · DAILY", active: false },
-  { title: "PR + Review", sub: "QODO · EVERY FIX", active: false },
-  { title: "Approval Gate", sub: "HUMAN · ALWAYS ON", active: false },
-];
-
 const Section2 = () => {
-  const { nodes, edges } = useMemo(() => buildSection2FlowGraph(), []);
+  const [activeCapability, setActiveCapability] =
+    useState<CapabilityId>("incident");
+  const activeConfig = capabilityConfigs[activeCapability];
+  const isIncidentDemo = activeCapability === "incident";
+
+  const { nodes, edges } = useMemo(
+    () => activeConfig.graphBuilder(),
+    [activeCapability, activeConfig],
+  );
+
   const [tab, setTab] = useState<"log" | "try">("log");
   const [visibleCount, setVisibleCount] = useState(logLines.length);
   const [status, setStatus] = useState<DemoStatus>("resolved");
@@ -76,7 +80,41 @@ const Section2 = () => {
           ? "INVESTIGATING"
           : "IDLE";
 
+  const incidentAgentStatus =
+    status === "resolved"
+      ? "Approved — merge is in progress."
+      : status === "awaiting"
+        ? "Waiting on you — this action is irreversible once merged."
+        : status === "running"
+          ? "Investigating — gathering evidence before any write."
+          : "Idle — press Break It to inject a failure.";
+
+  const gateLabel = isIncidentDemo
+    ? status === "resolved"
+      ? "4 / 4 GATES PASSED"
+      : status === "awaiting"
+        ? "3 / 4 GATES PASSED"
+        : status === "running"
+          ? `${Math.min(3, Math.ceil((visibleCount / logLines.length) * 3))} / 4 GATES PASSED`
+          : "0 / 4 GATES PASSED"
+    : `${activeConfig.gateIndex} / 4 GATES PASSED`;
+
+  const gateWidth = isIncidentDemo
+    ? status === "resolved"
+      ? "100%"
+      : status === "awaiting"
+        ? "75%"
+        : status === "running"
+          ? `${Math.max(15, (visibleCount / logLines.length) * 75)}%`
+          : "0%"
+    : `${(activeConfig.gateIndex / 4) * 100}%`;
+
+  const displayPrompt = isIncidentDemo
+    ? prompt
+    : "switch to Incident Flow to run the live demo";
+
   const breakIt = () => {
+    if (!isIncidentDemo) return;
     setTab("log");
     setVisibleCount(1);
     setStatus("running");
@@ -84,6 +122,7 @@ const Section2 = () => {
   };
 
   const next = () => {
+    if (!isIncidentDemo) return;
     if (status === "idle" || visibleCount === 0) {
       breakIt();
       return;
@@ -105,6 +144,7 @@ const Section2 = () => {
   };
 
   const approve = () => {
+    if (!isIncidentDemo) return;
     if (status !== "awaiting" && visibleCount < logLines.length) {
       setPrompt("finish the log first — press NEXT");
       return;
@@ -116,6 +156,7 @@ const Section2 = () => {
   };
 
   const clear = () => {
+    if (!isIncidentDemo) return;
     setVisibleCount(0);
     setStatus("idle");
     setPrompt("cleared — press Break It to start");
@@ -139,17 +180,29 @@ const Section2 = () => {
           <span
             className={[
               "w-1.5 h-1.5 inline-block",
-              status === "resolved"
+              isIncidentDemo && status === "resolved"
                 ? "bg-[#3D6B4F]"
-                : status === "awaiting"
+                : isIncidentDemo && status === "awaiting"
                   ? "bg-[#C9736B]"
-                  : status === "running"
+                  : isIncidentDemo && status === "running"
                     ? "bg-[#1a1a1a]"
                     : "bg-stone-500",
             ].join(" ")}
           />
-          <span className="hidden xs:inline sm:inline">{statusLabel}</span>
-          <span className="sm:hidden">{status === "resolved" ? "OK" : status === "awaiting" ? "WAIT" : status === "running" ? "RUN" : "IDLE"}</span>
+          <span className="hidden xs:inline sm:inline">
+            {isIncidentDemo ? statusLabel : activeConfig.title.toUpperCase()}
+          </span>
+          <span className="sm:hidden">
+            {isIncidentDemo
+              ? status === "resolved"
+                ? "OK"
+                : status === "awaiting"
+                  ? "WAIT"
+                  : status === "running"
+                    ? "RUN"
+                    : "IDLE"
+              : activeConfig.gateIndex}
+          </span>
         </div>
       </div>
 
@@ -158,56 +211,53 @@ const Section2 = () => {
           <p className="text-[10px] font-mono tracking-widest text-(--muted-color) mb-4">
             CAPABILITIES
           </p>
-          <ul className="grid grid-cols-2 lg:grid-cols-1 gap-4">
-            {capabilities.map((item) => (
-              <li
-                key={item.title}
-                className={
-                  item.active
-                    ? "border-l-2 border-(--foreground-color) bg-(--panel-color) pl-3 -ml-0.5 lg:-ml-3.5 py-1"
-                    : "border-l-2 border-transparent pl-3 -ml-0.5 lg:-ml-3.5 py-1"
-                }
-              >
-                <p className="text-[13px] font-medium text-(--foreground-color) flex items-center gap-1.5">
-                  <span className="w-1 h-1 bg-(--muted-color) inline-block" />
-                  {item.title}
-                </p>
-                <p className="text-[10px] font-mono tracking-wide text-(--muted-color) mt-0.5 pl-2.5">
-                  {item.sub}
-                </p>
-              </li>
-            ))}
+          <ul className="grid grid-cols-2 lg:grid-cols-1 gap-4" role="tablist">
+            {capabilitiesList.map((item) => {
+              const selected = activeCapability === item.id;
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setActiveCapability(item.id)}
+                    className={[
+                      "w-full text-left border-l-2 pl-3 -ml-0.5 lg:-ml-3.5 py-1 transition-colors",
+                      selected
+                        ? "border-(--foreground-color) bg-(--panel-color)"
+                        : "border-transparent hover:border-(--muted-color)/40 hover:bg-(--panel-color)/50",
+                    ].join(" ")}
+                  >
+                    <p className="text-[13px] font-medium text-(--foreground-color) flex items-center gap-1.5">
+                      <span className="w-1 h-1 bg-(--muted-color) inline-block" />
+                      {item.title}
+                    </p>
+                    <p className="text-[10px] font-mono tracking-wide text-(--muted-color) mt-0.5 pl-2.5">
+                      {item.sub}
+                    </p>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
 
           <div className="mt-6 lg:mt-10 pt-4 border-t border-(--border-color)">
             <p className="text-[10px] font-mono text-(--muted-color)">
-              {status === "resolved"
-                ? "4 / 4 GATES PASSED"
-                : status === "awaiting"
-                  ? "3 / 4 GATES PASSED"
-                  : status === "running"
-                    ? `${Math.min(3, Math.ceil((visibleCount / logLines.length) * 3))} / 4 GATES PASSED`
-                    : "0 / 4 GATES PASSED"}
+              {gateLabel}
             </p>
             <div className="h-1 bg-(--border-color) mt-2 w-full">
               <div
                 className="h-1 bg-[#EDA53B] transition-all duration-300"
-                style={{
-                  width:
-                    status === "resolved"
-                      ? "100%"
-                      : status === "awaiting"
-                        ? "75%"
-                        : status === "running"
-                          ? `${Math.max(15, (visibleCount / logLines.length) * 75)}%`
-                          : "0%",
-                }}
+                style={{ width: gateWidth }}
               />
             </div>
           </div>
         </div>
 
-        <div className="flex-1 min-w-0 border-r-0 lg:border-r border-(--border-color) bg-(--canvas-color)">
+        <div
+          className="flex-1 min-w-0 border-r-0 lg:border-r border-(--border-color) bg-(--canvas-color)"
+          role="tabpanel"
+        >
           <div className="overflow-x-auto">
             <div
               className="relative px-6 sm:px-8 py-8 min-h-105"
@@ -217,34 +267,27 @@ const Section2 = () => {
               }}
             >
               <SentinelFlowCanvas
+                key={activeCapability}
                 nodes={nodes}
                 edges={edges}
+                phase={activeConfig.highlightPhase}
                 draggable
                 interactive={false}
                 minHeight="17.5rem"
-                header={{
-                  left: "INCIDENT GRAPH",
-                  right: "CHECKOUT-SVC · P99 4.2S → 380MS",
-                }}
+                header={activeConfig.header}
               />
 
-              <div
-                className="absolute left-8 bottom-6 w-56 border border-(--card-border) shadow-sm px-4 py-3 -rotate-2"
-                style={{ backgroundColor: "var(--note-warm)" }}
-              >
-                <p className="text-[12px] font-medium text-(--foreground-color) leading-snug">
-                  Read-only first. The agent never touches state until a human
-                  clicks approve.
-                </p>
-              </div>
-              <div
-                className="absolute left-105 bottom-2 w-48 border border-(--card-border) shadow-sm px-4 py-3 rotate-1"
-                style={{ backgroundColor: "var(--note-cool)" }}
-              >
-                <p className="text-[12px] font-medium text-(--foreground-color) leading-snug">
-                  No root cause found? Escalate — don't guess.
-                </p>
-              </div>
+              {activeConfig.notes.map((note, i) => (
+                <div
+                  key={i}
+                  className={note.className}
+                  style={note.style}
+                >
+                  <p className="text-[12px] font-medium text-(--foreground-color) leading-snug">
+                    {note.text}
+                  </p>
+                </div>
+              ))}
 
               <div className="absolute top-6 right-2 w-64 bg-(--panel-color) border border-(--card-border) shadow-md">
                 <div className="px-3 py-2 border-b border-(--border-color)">
@@ -254,18 +297,14 @@ const Section2 = () => {
                 </div>
                 <div className="p-3 space-y-2">
                   <div className="bg-(--surface-color) px-2.5 py-1.5 text-[11px] text-(--foreground-color)">
-                    approve rollback of deploy 8f1c?
+                    {activeConfig.agentPrompt}
                   </div>
                   <div className="flex items-start gap-1.5 text-[11px] text-(--muted-color)">
                     <FiCircle className="w-2 h-2 mt-1 fill-[#EDA53B] text-[#EDA53B] shrink-0" />
                     <span>
-                      {status === "resolved"
-                        ? "Approved — merge is in progress."
-                        : status === "awaiting"
-                          ? "Waiting on you — this action is irreversible once merged."
-                          : status === "running"
-                            ? "Investigating — gathering evidence before any write."
-                            : "Idle — press Break It to inject a failure."}
+                      {isIncidentDemo
+                        ? incidentAgentStatus
+                        : activeConfig.agentStatus}
                     </span>
                   </div>
                 </div>
@@ -275,7 +314,7 @@ const Section2 = () => {
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 sm:px-8 py-4 border-t border-(--border-color)">
             <div className="flex flex-wrap gap-2">
-              {["TrueForge", "Qodo", "GitHub MCP"].map((t) => (
+              {activeConfig.tags.map((t) => (
                 <span
                   key={t}
                   className="text-[10px] font-mono tracking-wide border border-(--card-border) rounded-full px-3 py-1 text-(--muted-color)"
@@ -285,7 +324,9 @@ const Section2 = () => {
               ))}
             </div>
             <span className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-              LIVE · 1 INCIDENT RESOLVED TODAY
+              {isIncidentDemo
+                ? "LIVE · 1 INCIDENT RESOLVED TODAY"
+                : activeConfig.footerRight}
             </span>
           </div>
         </div>
@@ -319,23 +360,34 @@ const Section2 = () => {
 
         {tab === "log" ? (
           <div className="space-y-1.5 font-mono text-[12px] min-h-28">
-            {visibleCount === 0 ? (
-              <p className="text-stone-500">
-                log empty — press Break It to trigger a simulated incident
-              </p>
+            {isIncidentDemo ? (
+              <>
+                {visibleCount === 0 ? (
+                  <p className="text-stone-500">
+                    log empty — press Break It to trigger a simulated incident
+                  </p>
+                ) : (
+                  logLines.slice(0, visibleCount).map((l, i) => (
+                    <div key={i} className={`flex gap-2 ${l.c}`}>
+                      <span className="w-3 shrink-0">{l.t}</span>
+                      <span>{l.text}</span>
+                    </div>
+                  ))
+                )}
+                {status === "resolved" && visibleCount === logLines.length && (
+                  <div className="flex gap-2 text-[#8FBF9F]">
+                    <span className="w-3 shrink-0">✓</span>
+                    <span>human approved — rollback of 8f1c merged</span>
+                  </div>
+                )}
+              </>
             ) : (
-              logLines.slice(0, visibleCount).map((l, i) => (
+              activeConfig.staticLogLines.map((l, i) => (
                 <div key={i} className={`flex gap-2 ${l.c}`}>
                   <span className="w-3 shrink-0">{l.t}</span>
                   <span>{l.text}</span>
                 </div>
               ))
-            )}
-            {status === "resolved" && visibleCount === logLines.length && (
-              <div className="flex gap-2 text-[#8FBF9F]">
-                <span className="w-3 shrink-0">✓</span>
-                <span>human approved — rollback of 8f1c merged</span>
-              </div>
             )}
           </div>
         ) : (
@@ -350,7 +402,8 @@ const Section2 = () => {
               <button
                 type="button"
                 onClick={breakIt}
-                className="text-[10px] font-mono tracking-widest bg-[#C9736B] text-white px-3 py-1.5 hover:bg-[#b8625a] transition-colors"
+                disabled={!isIncidentDemo}
+                className="text-[10px] font-mono tracking-widest bg-[#C9736B] text-white px-3 py-1.5 hover:bg-[#b8625a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 BREAK IT
               </button>
@@ -367,20 +420,21 @@ const Section2 = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 pt-3 border-t border-stone-700">
           <div className="flex items-center gap-2 text-stone-500 font-mono text-[11px] min-w-0">
             <FiChevronRight className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{prompt}</span>
+            <span className="truncate">{displayPrompt}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={breakIt}
-              className="text-[10px] font-mono tracking-widest border border-[#C9736B] text-[#C9736B] px-3 py-1.5 hover:bg-[#C9736B] hover:text-white transition-colors"
+              disabled={!isIncidentDemo}
+              className="text-[10px] font-mono tracking-widest border border-[#C9736B] text-[#C9736B] px-3 py-1.5 hover:bg-[#C9736B] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               BREAK IT
             </button>
             <button
               type="button"
               onClick={next}
-              disabled={status === "resolved"}
+              disabled={!isIncidentDemo || status === "resolved"}
               className="text-[10px] font-mono tracking-widest border border-stone-600 text-stone-300 px-3 py-1.5 hover:border-[#EDA53B] hover:text-[#EDA53B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               NEXT
@@ -388,7 +442,9 @@ const Section2 = () => {
             <button
               type="button"
               onClick={approve}
-              disabled={status === "resolved" || status === "idle"}
+              disabled={
+                !isIncidentDemo || status === "resolved" || status === "idle"
+              }
               className="text-[10px] font-mono tracking-widest border border-stone-600 text-stone-300 px-3 py-1.5 hover:border-[#EDA53B] hover:text-[#EDA53B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               APPROVE
@@ -396,7 +452,8 @@ const Section2 = () => {
             <button
               type="button"
               onClick={clear}
-              className="text-[10px] font-mono tracking-widest border border-stone-600 text-stone-300 px-3 py-1.5 hover:border-[#EDA53B] hover:text-[#EDA53B] transition-colors"
+              disabled={!isIncidentDemo}
+              className="text-[10px] font-mono tracking-widest border border-stone-600 text-stone-300 px-3 py-1.5 hover:border-[#EDA53B] hover:text-[#EDA53B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               CLEAR
             </button>
@@ -406,10 +463,10 @@ const Section2 = () => {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 sm:px-6 py-3 bg-(--surface-color) border border-t-0 border-(--border-color)">
         <span className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-          FIG. 01 — READ, VERIFY, GATE, SHIP
+          {activeConfig.footerFig}
         </span>
         <span className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-          BUILT ON TRUEFORGE
+          {isIncidentDemo ? "BUILT ON TRUEFORGE" : activeConfig.footerRight}
         </span>
       </div>
     </div>
