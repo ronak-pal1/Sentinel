@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import MonitoringGraphSimulation from "./MonitoringGraphSimulation";
 
 const GITHUB_URL = "https://github.com/ronak-pal1/Sentinel";
 
@@ -61,7 +62,7 @@ const Hero = () => {
         </div>
 
         <div className="w-full pt-1 overflow-hidden">
-          <div className="w-full h-30 bg-(--surface-color) border border-(--border-color)" />
+          <MonitoringGraphSimulation className="h-30" density="hero" />
         </div>
       </div>
     </div>

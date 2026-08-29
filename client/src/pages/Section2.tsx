@@ -8,8 +8,6 @@ import {
   type CapabilityId,
 } from "./section2Capabilities";
 
-const GRAPH_WIDTH = 820;
-
 const logLines = [
   {
     t: "·",
@@ -258,29 +256,23 @@ const Section2 = () => {
           className="flex-1 min-w-0 border-r-0 lg:border-r border-(--border-color) bg-(--canvas-color)"
           role="tabpanel"
         >
-          <div className="overflow-x-auto">
-            <div
-              className="relative px-6 sm:px-8 py-8 min-h-105"
-              style={{
-                width: "100%",
-                minWidth: GRAPH_WIDTH,
-              }}
-            >
-              <SentinelFlowCanvas
-                key={activeCapability}
-                nodes={nodes}
-                edges={edges}
-                phase={activeConfig.highlightPhase}
-                draggable
-                interactive={false}
-                minHeight="17.5rem"
-                header={activeConfig.header}
-              />
+          <div className="relative px-4 sm:px-8 py-6 sm:py-8 min-h-72 lg:min-h-105">
+            <SentinelFlowCanvas
+              key={activeCapability}
+              nodes={nodes}
+              edges={edges}
+              phase={activeConfig.highlightPhase}
+              draggable
+              interactive={false}
+              minHeight="14rem"
+              header={activeConfig.header}
+            />
 
+            <div className="flex flex-col gap-3 mt-4 lg:hidden">
               {activeConfig.notes.map((note, i) => (
                 <div
                   key={i}
-                  className={note.className}
+                  className="border border-(--card-border) shadow-sm px-4 py-3"
                   style={note.style}
                 >
                   <p className="text-[12px] font-medium text-(--foreground-color) leading-snug">
@@ -288,25 +280,37 @@ const Section2 = () => {
                   </p>
                 </div>
               ))}
+            </div>
 
-              <div className="absolute top-6 right-2 w-64 bg-(--panel-color) border border-(--card-border) shadow-md">
-                <div className="px-3 py-2 border-b border-(--border-color)">
-                  <p className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-                    AGENT REASONING
-                  </p>
+            {activeConfig.notes.map((note, i) => (
+              <div
+                key={i}
+                className={`hidden lg:block ${note.className}`}
+                style={note.style}
+              >
+                <p className="text-[12px] font-medium text-(--foreground-color) leading-snug">
+                  {note.text}
+                </p>
+              </div>
+            ))}
+
+            <div className="relative w-full mt-4 lg:absolute lg:top-6 lg:right-2 lg:w-64 lg:mt-0 bg-(--panel-color) border border-(--card-border) shadow-md">
+              <div className="px-3 py-2 border-b border-(--border-color)">
+                <p className="text-[10px] font-mono tracking-widest text-(--muted-color)">
+                  AGENT REASONING
+                </p>
+              </div>
+              <div className="p-3 space-y-2">
+                <div className="bg-(--surface-color) px-2.5 py-1.5 text-[11px] text-(--foreground-color)">
+                  {activeConfig.agentPrompt}
                 </div>
-                <div className="p-3 space-y-2">
-                  <div className="bg-(--surface-color) px-2.5 py-1.5 text-[11px] text-(--foreground-color)">
-                    {activeConfig.agentPrompt}
-                  </div>
-                  <div className="flex items-start gap-1.5 text-[11px] text-(--muted-color)">
-                    <FiCircle className="w-2 h-2 mt-1 fill-[#EDA53B] text-[#EDA53B] shrink-0" />
-                    <span>
-                      {isIncidentDemo
-                        ? incidentAgentStatus
-                        : activeConfig.agentStatus}
-                    </span>
-                  </div>
+                <div className="flex items-start gap-1.5 text-[11px] text-(--muted-color)">
+                  <FiCircle className="w-2 h-2 mt-1 fill-[#EDA53B] text-[#EDA53B] shrink-0" />
+                  <span>
+                    {isIncidentDemo
+                      ? incidentAgentStatus
+                      : activeConfig.agentStatus}
+                  </span>
                 </div>
               </div>
             </div>
