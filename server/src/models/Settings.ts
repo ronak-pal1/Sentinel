@@ -17,6 +17,9 @@ export type SettingsAttrs = {
   profileId: string;
   connectors: ConnectorAttrs[];
   modelApiKeyEncrypted?: string;
+  githubTokenEncrypted?: string;
+  githubConnectedAt?: string;
+  githubUsername?: string;
   sandboxLimits: SandboxLimitsAttrs;
 };
 
@@ -31,6 +34,9 @@ const settingsSchema = new Schema<SettingsAttrs>(
       },
     ],
     modelApiKeyEncrypted: { type: String },
+    githubTokenEncrypted: { type: String },
+    githubConnectedAt: { type: String },
+    githubUsername: { type: String },
     sandboxLimits: {
       maxReplay: { type: Number, required: true },
       timeoutSec: { type: Number, required: true },

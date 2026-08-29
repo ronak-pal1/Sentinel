@@ -25,6 +25,14 @@ export type IncidentAttrs = {
   alertType: string;
   phase: IncidentPhase;
   startedAt: string;
+  source?: 'manual' | 'webhook' | 'demo';
+  webhookId?: string;
+  githubOwner?: string;
+  githubRepo?: string;
+  alertMessage?: string;
+  daytonaSandboxId?: string;
+  proposedPatch?: string;
+  proposedBranch?: string;
   resolvedAt?: string;
   rootCause?: string;
   confidence?: number;
@@ -55,6 +63,14 @@ const incidentSchema = new Schema<IncidentAttrs>(
       index: true,
     },
     startedAt: { type: String, required: true },
+    source: { type: String, enum: ['manual', 'webhook', 'demo'] },
+    webhookId: { type: String },
+    githubOwner: { type: String },
+    githubRepo: { type: String },
+    alertMessage: { type: String },
+    daytonaSandboxId: { type: String },
+    proposedPatch: { type: String },
+    proposedBranch: { type: String },
     resolvedAt: { type: String },
     rootCause: { type: String },
     confidence: { type: Number, min: 0, max: 1 },
