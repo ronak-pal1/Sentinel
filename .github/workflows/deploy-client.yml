@@ -1,0 +1,43 @@
+name: Deploy to Client Vercel
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    if: contains(github.event.head_commit.message, 'deploy client')
+    runs-on: ubuntu-latest
+
+    # This forces all steps below to execute inside the client directory
+    defaults:
+      run:
+        working-directory: ./client
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # We check out the root but we'll work inside /client
+          sparse-checkout: |
+            client
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Project Settings
+        # Added --cwd flag so Vercel looks inside the client folder for project configurations
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --cwd ./
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_CLIENT_PROJECT_ID }}
+
+      - name: Build & Deploy
+        run: |
+          # Since defaults.run changes our directory, .git is actually one level up
+          rm -rf ../.git
+
+          # Use npx to ensure the command is found
+          npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_CLIENT_PROJECT_ID }}
