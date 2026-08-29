@@ -14,13 +14,30 @@ export function createApp(): Express {
   app.disable('x-powered-by');
 
   app.use(helmet());
+  
   app.use(
     cors({
       origin: env.CLIENT_ORIGIN,
       credentials: true,
+      allowedHeaders: ['Content-Type', 'X-Profile-Id', 'X-Profile-Token'],
     }),
   );
-  app.use(compression());
+
+
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (req.headers.accept === 'text/event-stream') {
+          return false;
+        }
+        if (req.path.includes('/stream') || req.path.includes('/events/stream')) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    }),
+  
+  );
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));

@@ -16,3 +16,7 @@ export function createIncidentId(service: string): string {
 export function createEventId(): string {
   return `evt-${shortId(4)}`;
 }
+
+export function createProfileId(): string {
+  return `prof-${shortId(6)}`;
+}

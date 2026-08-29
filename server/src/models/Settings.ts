@@ -14,7 +14,7 @@ export type SandboxLimitsAttrs = {
 };
 
 export type SettingsAttrs = {
-  key: string;
+  profileId: string;
   connectors: ConnectorAttrs[];
   modelApiKeyEncrypted?: string;
   sandboxLimits: SandboxLimitsAttrs;
@@ -22,7 +22,7 @@ export type SettingsAttrs = {
 
 const settingsSchema = new Schema<SettingsAttrs>(
   {
-    key: { type: String, required: true, unique: true, default: 'default' },
+    profileId: { type: String, required: true, unique: true, index: true },
     connectors: [
       {
         name: { type: String, required: true },

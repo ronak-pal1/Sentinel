@@ -20,6 +20,7 @@ export type PendingApproval = {
 
 export type IncidentAttrs = {
   id: string;
+  profileId: string;
   service: string;
   alertType: string;
   phase: IncidentPhase;
@@ -43,6 +44,7 @@ export type IncidentAttrs = {
 const incidentSchema = new Schema<IncidentAttrs>(
   {
     id: { type: String, required: true, unique: true, index: true },
+    profileId: { type: String, required: true, index: true },
     service: { type: String, required: true },
     alertType: { type: String, required: true },
     phase: {
