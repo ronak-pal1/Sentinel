@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
 import { StatusCodes } from 'http-status-codes';
-import { Profile, type ProfileAttrs } from '../models/Profile';
+import { Profile, type ProfileAttrs, type ProfileMode } from '../models/Profile';
 import { AppError } from '../utils/AppError';
 import { hashToken, verifyTokenHash } from '../utils/crypto';
 import { createProfileId } from '../utils/ids';
@@ -9,10 +9,12 @@ export type PublicProfile = {
   id: string;
   displayName: string;
   createdAt: string;
+  mode: ProfileMode | null;
 };
 
 export type CreatedProfile = PublicProfile & {
   token: string;
+  mode: ProfileMode | null;
 };
 
 function toPublicProfile(profile: ProfileAttrs): PublicProfile {
@@ -20,6 +22,7 @@ function toPublicProfile(profile: ProfileAttrs): PublicProfile {
     id: profile.id,
     displayName: profile.displayName,
     createdAt: profile.createdAt,
+    mode: profile.mode ?? null,
   };
 }
 
@@ -36,7 +39,7 @@ export async function createProfile(displayName: string): Promise<CreatedProfile
     createdAt,
   });
 
-  return { id, displayName, createdAt, token };
+  return { id, displayName, createdAt, token, mode: null };
 }
 
 export async function verifyProfile(
@@ -56,4 +59,28 @@ export async function getProfileById(id: string): Promise<PublicProfile> {
     throw new AppError('Profile not found', StatusCodes.NOT_FOUND);
   }
   return toPublicProfile(profile);
+}
+
+export async function setProfileMode(
+  id: string,
+  mode: ProfileMode,
+): Promise<PublicProfile> {
+  const modeSelectedAt = new Date().toISOString();
+  const profile = await Profile.findOneAndUpdate(
+    { id },
+    { $set: { mode, modeSelectedAt } },
+    { new: true },
+  ).lean<ProfileAttrs>();
+  if (!profile) {
+    throw new AppError('Profile not found', StatusCodes.NOT_FOUND);
+  }
+  return toPublicProfile(profile);
+}
+
+export async function getProfileMode(id: string): Promise<ProfileMode | null> {
+  const profile = await Profile.findOne({ id }).lean<ProfileAttrs>();
+  if (!profile) {
+    throw new AppError('Profile not found', StatusCodes.NOT_FOUND);
+  }
+  return profile.mode ?? null;
 }

@@ -20,3 +20,7 @@ export function createEventId(): string {
 export function createProfileId(): string {
   return `prof-${shortId(6)}`;
 }
+
+export function createWebhookId(): string {
+  return `wh-${shortId(6)}`;
+}
