@@ -28,6 +28,10 @@ const envSchema = z.object({
     .regex(/^[0-9a-fA-F]{64}$/, 'SETTINGS_ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
+  SERVER_PUBLIC_URL: z
+    .string()
+    .url()
+    .default('http://localhost:3000'),
 });
 
 const parsed = envSchema.safeParse(process.env);
