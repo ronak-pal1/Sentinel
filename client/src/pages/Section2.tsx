@@ -1,32 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { FiCircle, FiChevronRight } from "react-icons/fi";
+import {
+  SentinelFlowCanvas,
+  buildSection2FlowGraph,
+} from "../components/flow";
 
 const GRAPH_WIDTH = 820;
-
-const nodes = {
-  alert: { x: 40, y: 60, w: 120, h: 44, label: "ALERT FIRES", kind: "box" },
-  investigate: {
-    x: 200,
-    y: 60,
-    w: 120,
-    h: 44,
-    label: "INVESTIGATE",
-    kind: "box",
-  },
-  gate1: {
-    x: 360,
-    y: 52,
-    w: 130,
-    h: 60,
-    label: "ROOT CAUSE\nFOUND?",
-    kind: "diamond",
-  },
-  sandbox: { x: 530, y: 60, w: 120, h: 44, label: "SANDBOX FIX", kind: "box" },
-  escalate: { x: 360, y: 190, w: 130, h: 44, label: "PAGE HUMAN", kind: "box" },
-  pr: { x: 530, y: 190, w: 120, h: 44, label: "OPEN PR", kind: "box" },
-  approve: { x: 700, y: 125, w: 120, h: 44, label: "APPROVE", kind: "accent" },
-};
 
 const logLines = [
   {
@@ -73,74 +53,6 @@ const logLines = [
 
 type DemoStatus = "idle" | "running" | "awaiting" | "resolved";
 
-function Node({ n }: { n: (typeof nodes)[keyof typeof nodes] }) {
-  const isDiamond = n.kind === "diamond";
-  const isAccent = n.kind === "accent";
-  return (
-    <div
-      className={[
-        "absolute flex items-center justify-center text-center px-3 border font-mono text-[11px] tracking-wide leading-tight",
-        isDiamond ? "rotate-45" : "",
-        isAccent
-          ? "bg-primary border-[#c98a2c] text-[#1a1a1a] font-semibold"
-          : "bg-(--panel-color) border-(--card-border) text-(--foreground-color)",
-      ].join(" ")}
-      style={{ left: n.x, top: n.y, width: n.w, height: n.h }}
-    >
-      <span
-        className={
-          isDiamond ? "-rotate-45 whitespace-pre-line" : "whitespace-pre-line"
-        }
-      >
-        {n.label}
-      </span>
-    </div>
-  );
-}
-
-function Connector({
-  from,
-  to,
-  label,
-}: {
-  from: [number, number];
-  to: [number, number];
-  label?: string;
-}) {
-  const [x1, y1] = from;
-  const [x2, y2] = to;
-  const midX = (x1 + x2) / 2;
-  return (
-    <svg
-      className="absolute overflow-visible pointer-events-none text-(--muted-color)"
-      style={{ left: 0, top: 0, width: 1, height: 1 }}
-    >
-      <line
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke="currentColor"
-        strokeWidth={1.5}
-      />
-      <polygon
-        points={`${x2},${y2} ${x2 - 6},${y2 - 4} ${x2 - 6},${y2 + 4}`}
-        className="fill-current"
-        transform={`rotate(${(Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI}, ${x2}, ${y2})`}
-      />
-      {label && (
-        <text
-          x={midX}
-          y={y1 - 8}
-          className="fill-[#B8791F] text-[10px] font-mono font-semibold"
-        >
-          {label}
-        </text>
-      )}
-    </svg>
-  );
-}
-
 const capabilities = [
   { title: "Incident Flow", sub: "READ-ONLY · LIVE", active: true },
   { title: "Sandbox Verify", sub: "ISOLATED · DAILY", active: false },
@@ -149,6 +61,7 @@ const capabilities = [
 ];
 
 const Section2 = () => {
+  const { nodes, edges } = useMemo(() => buildSection2FlowGraph(), []);
   const [tab, setTab] = useState<"log" | "try">("log");
   const [visibleCount, setVisibleCount] = useState(logLines.length);
   const [status, setStatus] = useState<DemoStatus>("resolved");
@@ -301,32 +214,19 @@ const Section2 = () => {
               style={{
                 width: "100%",
                 minWidth: GRAPH_WIDTH,
-                backgroundImage:
-                  "radial-gradient(circle, var(--dot-grid) 1px, transparent 1px)",
-                backgroundSize: "18px 18px",
               }}
             >
-              <div className="flex items-center justify-between mb-6 gap-4">
-                <span className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-                  INCIDENT GRAPH
-                </span>
-                <span className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-                  CHECKOUT-SVC · P99 4.2S → 380MS
-                </span>
-              </div>
-
-              <div className="relative h-70" style={{ width: GRAPH_WIDTH - 64 }}>
-                <Connector from={[160, 82]} to={[196, 82]} />
-                <Connector from={[320, 82]} to={[356, 82]} />
-                <Connector from={[449, 78]} to={[526, 82]} label="FOUND" />
-                <Connector from={[425, 105]} to={[400, 186]} label="UNKNOWN" />
-                <Connector from={[490, 212]} to={[526, 212]} />
-                <Connector from={[650, 82]} to={[698, 130]} />
-                <Connector from={[650, 212]} to={[698, 150]} />
-                {Object.values(nodes).map((n, i) => (
-                  <Node n={n} key={i} />
-                ))}
-              </div>
+              <SentinelFlowCanvas
+                nodes={nodes}
+                edges={edges}
+                draggable
+                interactive={false}
+                minHeight="17.5rem"
+                header={{
+                  left: "INCIDENT GRAPH",
+                  right: "CHECKOUT-SVC · P99 4.2S → 380MS",
+                }}
+              />
 
               <div
                 className="absolute left-8 bottom-6 w-56 border border-(--card-border) shadow-sm px-4 py-3 -rotate-2"
