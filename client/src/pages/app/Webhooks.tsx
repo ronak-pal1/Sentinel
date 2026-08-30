@@ -9,8 +9,10 @@ import {
   type GitHubRepo,
   type WebhookRecord,
 } from "../../lib/api";
+import { useRequireRealMode } from "../../lib/useRequireRealMode";
 
 export default function Webhooks() {
+  const { allowed, loading: modeLoading } = useRequireRealMode();
   const [webhooks, setWebhooks] = useState<WebhookRecord[]>([]);
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [name, setName] = useState("");
@@ -67,6 +69,12 @@ export default function Webhooks() {
   const copyText = async (text: string) => {
     await navigator.clipboard.writeText(text);
   };
+
+  if (modeLoading || !allowed) {
+    return (
+      <div className="px-8 py-20 text-sm text-(--muted-color)">Loading webhooks…</div>
+    );
+  }
 
   if (loading) {
     return (

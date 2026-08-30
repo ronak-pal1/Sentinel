@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ModeCards } from "../../components/ModeCards";
 import { StatusPill } from "../../components/dashboard/StatusPill";
 import {
   connectGitHub,
@@ -10,12 +11,55 @@ import {
   type PublicSettings,
 } from "../../lib/api";
 import { useProfile } from "../../lib/ProfileContext";
+import type { ProfileMode } from "../../lib/profile";
+import { useSwitchMode } from "../../lib/useSwitchMode";
 
 const demoConnectors = [
   { name: "GitHub MCP", status: "Connected" as const, detail: "PRs · reviews · merge" },
   { name: "Sandbox", status: "Connected" as const, detail: "Ephemeral clone · traffic replay" },
   { name: "Metrics source", status: "Connected" as const, detail: "Grafana · checkout-svc" },
 ];
+
+function ModeSwitcherSection() {
+  const { mode } = useProfile();
+  const { switchMode, switching, error, clearError } = useSwitchMode();
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleSelect = (next: ProfileMode) => {
+    clearError();
+    setMessage(null);
+    void switchMode(next).then((ok) => {
+      if (ok && next !== mode) {
+        setMessage(`Switched to ${next} mode`);
+      }
+    });
+  };
+
+  return (
+    <section id="mode" className="mb-10">
+      <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
+        EXPERIENCE MODE
+      </h2>
+      <p className="text-sm text-(--muted-color) mb-4">
+        Switch between demo and real mode at any time. Demo uses a scripted simulator;
+        real mode connects to GitHub, webhooks, and live incident response.
+      </p>
+      <ModeCards
+        currentMode={mode}
+        onSelect={handleSelect}
+        submitting={switching}
+      />
+      {message ? (
+        <p className="mt-4 text-sm text-green-700">{message}</p>
+      ) : null}
+      {error ? (
+        <p className="mt-4 text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
 
 export default function Settings() {
   const { mode } = useProfile();
@@ -33,7 +77,11 @@ export default function Settings() {
   const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
-    if (isDemo) return;
+    if (isDemo) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     void Promise.all([getSettings(), getGitHubStatus()])
       .then(([s, gh]) => {
         setSettings(s);
@@ -90,192 +138,186 @@ export default function Settings() {
     }
   };
 
-  if (isDemo) {
-    return (
-      <div className="px-4 sm:px-6 md:px-8 py-8 pb-20 font-sans text-(--foreground-color) max-w-2xl">
-        <p className="text-[10px] font-mono tracking-widest text-(--muted-color) mb-2">
-          SENTINEL / SETTINGS
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight mb-2">Connections</h1>
-        <p className="text-(--muted-color) text-sm mb-10">
-          Demo mode — all connectors are mocked. No authentication is required to
-          run Break It.
-        </p>
-
-        <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
-          MCP SERVERS
-        </h2>
-        <ul className="border border-(--border-color) mb-10 divide-y divide-stone-200">
-          {demoConnectors.map((c) => (
-            <li
-              key={c.name}
-              className="flex items-center justify-between gap-4 px-4 py-4 bg-(--panel-color)"
-            >
-              <div>
-                <p className="font-medium text-sm">{c.name}</p>
-                <p className="text-[11px] font-mono text-(--muted-color) mt-0.5 tracking-wide">
-                  {c.detail}
-                </p>
-              </div>
-              <StatusPill status="healthy" label="Connected" />
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="px-8 py-20 text-sm text-(--muted-color)">Loading settings…</div>
-    );
-  }
-
   return (
-    <div className="px-4 sm:px-6 md:px-8 py-8 pb-20 font-sans text-(--foreground-color) max-w-2xl">
+    <div className="px-4 sm:px-6 md:px-8 py-8 pb-20 font-sans text-(--foreground-color) max-w-3xl">
       <p className="text-[10px] font-mono tracking-widest text-(--muted-color) mb-2">
-        SENTINEL / SETTINGS · REAL
+        SENTINEL / SETTINGS{isDemo ? "" : " · REAL"}
       </p>
-      <h1 className="text-3xl font-semibold tracking-tight mb-2">Connections</h1>
+      <h1 className="text-3xl font-semibold tracking-tight mb-2">Settings</h1>
       <p className="text-(--muted-color) text-sm mb-8">
-        Connect GitHub with a Personal Access Token, then create webhooks to receive
-        alerts.
+        {isDemo
+          ? "Demo mode — all connectors are mocked. Switch to real mode to connect GitHub and webhooks."
+          : "Connect GitHub with a Personal Access Token, then create webhooks to receive alerts."}
       </p>
 
-      {message ? (
-        <p className="mb-4 text-sm text-green-700">{message}</p>
-      ) : null}
-      {error ? (
-        <p className="mb-4 text-sm text-red-600" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <ModeSwitcherSection />
 
-      <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
-        GITHUB
-      </h2>
-      <div className="border border-(--border-color) bg-(--panel-color) px-4 py-4 mb-10 space-y-3">
-        {githubStatus?.connected ? (
-          <>
-            <p className="text-sm">
-              Connected as{" "}
-              <span className="font-mono">{githubStatus.username}</span>
-            </p>
-            <button
-              type="button"
-              onClick={() => void handleDisconnectGitHub()}
-              className="text-sm text-red-600 hover:underline"
-            >
-              Disconnect
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleTest("GitHub")}
-              className="ml-4 text-sm text-[#B8791F] hover:underline"
-            >
-              Test connection
-            </button>
-          </>
-        ) : (
-          <>
-            <label className="block">
-              <span className="text-[11px] font-mono tracking-widest text-(--muted-color)">
-                PERSONAL ACCESS TOKEN
-              </span>
-              <input
-                type="password"
-                value={githubToken}
-                onChange={(e) => setGithubToken(e.target.value)}
-                className="mt-2 w-full bg-(--surface-color) border border-(--border-color) px-3 py-2.5 font-mono text-sm outline-none focus:border-primary"
-                autoComplete="off"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void handleConnectGitHub()}
-              disabled={!githubToken.trim()}
-              className="bg-primary hover:bg-[#e0a240] disabled:opacity-60 text-black font-medium px-4 py-2 text-sm"
-            >
-              Connect GitHub
-            </button>
-          </>
-        )}
-      </div>
-
-      <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
-        CONNECTORS
-      </h2>
-      <ul className="border border-(--border-color) mb-10 divide-y divide-stone-200">
-        {(settings?.connectors ?? []).map((c) => (
-          <li
-            key={c.name}
-            className="flex items-center justify-between gap-4 px-4 py-4 bg-(--panel-color)"
-          >
-            <div>
-              <p className="font-medium text-sm">{c.name}</p>
-              <p className="text-[11px] font-mono text-(--muted-color) mt-0.5">
-                {c.detail}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleTest(c.name)}
-              className="text-[11px] font-mono text-[#B8791F] hover:underline"
-            >
-              TEST
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
-        MODEL PROVIDER
-      </h2>
-      <div className="border border-(--border-color) bg-(--surface-color) px-4 py-4 mb-10 space-y-3">
-        {settings?.modelApiKeyMasked ? (
-          <p className="text-sm font-mono text-(--muted-color)">
-            Key saved: {settings.modelApiKeyMasked}
-          </p>
-        ) : null}
-        <input
-          type="password"
-          value={modelKey}
-          onChange={(e) => setModelKey(e.target.value)}
-          placeholder="sk-…"
-          className="w-full bg-(--panel-color) border border-(--border-color) px-3 py-2.5 font-mono text-sm outline-none focus:border-primary"
-          autoComplete="off"
-        />
-        <button
-          type="button"
-          onClick={() => void handleSaveModelKey()}
-          disabled={!modelKey.trim()}
-          className="bg-primary hover:bg-[#e0a240] disabled:opacity-60 text-black font-medium px-4 py-2 text-sm"
-        >
-          Save API key
-        </button>
-      </div>
-
-      {settings?.sandboxLimits ? (
+      {isDemo ? (
         <>
           <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
-            SANDBOX LIMITS
+            MCP SERVERS
           </h2>
-          <div className="border border-(--border-color) bg-(--panel-color) px-4 py-4 grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-                MAX REPLAY
-              </p>
-              <p className="font-mono mt-1">{settings.sandboxLimits.maxReplay} requests</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-mono tracking-widest text-(--muted-color)">
-                TIMEOUT
-              </p>
-              <p className="font-mono mt-1">{settings.sandboxLimits.timeoutSec}s</p>
-            </div>
-          </div>
+          <ul className="border border-(--border-color) mb-10 divide-y divide-stone-200">
+            {demoConnectors.map((c) => (
+              <li
+                key={c.name}
+                className="flex items-center justify-between gap-4 px-4 py-4 bg-(--panel-color)"
+              >
+                <div>
+                  <p className="font-medium text-sm">{c.name}</p>
+                  <p className="text-[11px] font-mono text-(--muted-color) mt-0.5 tracking-wide">
+                    {c.detail}
+                  </p>
+                </div>
+                <StatusPill status="healthy" label="Connected" />
+              </li>
+            ))}
+          </ul>
         </>
-      ) : null}
+      ) : loading ? (
+        <div className="py-8 text-sm text-(--muted-color)">Loading connections…</div>
+      ) : (
+        <>
+          {message ? (
+            <p className="mb-4 text-sm text-green-700">{message}</p>
+          ) : null}
+          {error ? (
+            <p className="mb-4 text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
+            GITHUB
+          </h2>
+          <div className="border border-(--border-color) bg-(--panel-color) px-4 py-4 mb-10 space-y-3">
+            {githubStatus?.connected ? (
+              <>
+                <p className="text-sm">
+                  Connected as{" "}
+                  <span className="font-mono">{githubStatus.username}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleDisconnectGitHub()}
+                  className="text-sm text-red-600 hover:underline"
+                >
+                  Disconnect
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleTest("GitHub")}
+                  className="ml-4 text-sm text-[#B8791F] hover:underline"
+                >
+                  Test connection
+                </button>
+              </>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="text-[11px] font-mono tracking-widest text-(--muted-color)">
+                    PERSONAL ACCESS TOKEN
+                  </span>
+                  <input
+                    type="password"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    className="mt-2 w-full bg-(--surface-color) border border-(--border-color) px-3 py-2.5 font-mono text-sm outline-none focus:border-primary"
+                    autoComplete="off"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void handleConnectGitHub()}
+                  disabled={!githubToken.trim()}
+                  className="bg-primary hover:bg-[#e0a240] disabled:opacity-60 text-black font-medium px-4 py-2 text-sm"
+                >
+                  Connect GitHub
+                </button>
+              </>
+            )}
+          </div>
+
+          <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
+            CONNECTORS
+          </h2>
+          <ul className="border border-(--border-color) mb-10 divide-y divide-stone-200">
+            {(settings?.connectors ?? []).map((c) => (
+              <li
+                key={c.name}
+                className="flex items-center justify-between gap-4 px-4 py-4 bg-(--panel-color)"
+              >
+                <div>
+                  <p className="font-medium text-sm">{c.name}</p>
+                  <p className="text-[11px] font-mono text-(--muted-color) mt-0.5">
+                    {c.detail}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleTest(c.name)}
+                  className="text-[11px] font-mono text-[#B8791F] hover:underline"
+                >
+                  TEST
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
+            MODEL PROVIDER
+          </h2>
+          <div className="border border-(--border-color) bg-(--surface-color) px-4 py-4 mb-10 space-y-3">
+            {settings?.modelApiKeyMasked ? (
+              <p className="text-sm font-mono text-(--muted-color)">
+                Key saved: {settings.modelApiKeyMasked}
+              </p>
+            ) : null}
+            <input
+              type="password"
+              value={modelKey}
+              onChange={(e) => setModelKey(e.target.value)}
+              placeholder="sk-…"
+              className="w-full bg-(--panel-color) border border-(--border-color) px-3 py-2.5 font-mono text-sm outline-none focus:border-primary"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => void handleSaveModelKey()}
+              disabled={!modelKey.trim()}
+              className="bg-primary hover:bg-[#e0a240] disabled:opacity-60 text-black font-medium px-4 py-2 text-sm"
+            >
+              Save API key
+            </button>
+          </div>
+
+          {settings?.sandboxLimits ? (
+            <>
+              <h2 className="text-[11px] font-mono tracking-widest text-(--muted-color) mb-4">
+                SANDBOX LIMITS
+              </h2>
+              <div className="border border-(--border-color) bg-(--panel-color) px-4 py-4 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-[10px] font-mono tracking-widest text-(--muted-color)">
+                    MAX REPLAY
+                  </p>
+                  <p className="font-mono mt-1">
+                    {settings.sandboxLimits.maxReplay} requests
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-mono tracking-widest text-(--muted-color)">
+                    TIMEOUT
+                  </p>
+                  <p className="font-mono mt-1">
+                    {settings.sandboxLimits.timeoutSec}s
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

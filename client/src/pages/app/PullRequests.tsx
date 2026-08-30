@@ -1,19 +1,45 @@
 import { useEffect, useState } from "react";
 import { listGitHubPulls, type GitHubPullRequest } from "../../lib/api";
+import { useRequireRealMode } from "../../lib/useRequireRealMode";
 
 export default function PullRequests() {
+  const { allowed, loading: modeLoading } = useRequireRealMode();
   const [pulls, setPulls] = useState<GitHubPullRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (modeLoading || !allowed) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
     void listGitHubPulls()
-      .then(setPulls)
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load PRs"),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+      .then((data) => {
+        if (!cancelled) setPulls(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load PRs");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allowed, modeLoading]);
+
+  if (modeLoading || !allowed) {
+    return (
+      <div className="px-8 py-20 text-sm text-(--muted-color)">
+        Loading pull requests…
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -30,7 +56,8 @@ export default function PullRequests() {
       </p>
       <h1 className="text-3xl font-semibold tracking-tight mb-2">Pull requests</h1>
       <p className="text-(--muted-color) text-sm mb-8">
-        Open and closed pull requests across your connected GitHub repositories.
+        Recent pull requests from webhook-linked and recently updated GitHub
+        repositories.
       </p>
 
       {error ? (
@@ -39,7 +66,7 @@ export default function PullRequests() {
         </p>
       ) : null}
 
-      {pulls.length === 0 ? (
+      {pulls.length === 0 && !error ? (
         <p className="text-sm text-(--muted-color)">No pull requests found.</p>
       ) : (
         <div className="border border-(--border-color) overflow-hidden">
