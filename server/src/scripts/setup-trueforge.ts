@@ -133,9 +133,23 @@ async function main() {
     });
   }
 
+  const includeGithubMcp = Boolean(githubToken);
+  if (includeGithubMcp) {
+    log('Configuring GitHub MCP', 'github');
+    await client.upsertGithubMcp({ token: githubToken! });
+  } else {
+    warn(
+      'Skipping GitHub MCP — set GITHUB_TOKEN (or GITHUB_PAT) to enable GitHub tools on the agent',
+    );
+  }
+
   log('Creating Sentinel agent', SENTINEL_AGENT_NAME);
-  const agent = await client.upsertSentinelAgent(agentModelFqn);
-  log(`Agent ${agent.action}`, `${agent.name} -> ${agentModelFqn}${agent.id ? ` (${agent.id})` : ''}`);
+  const agent = await client.upsertSentinelAgent(agentModelFqn, { includeGithubMcp });
+  const githubSuffix = includeGithubMcp ? ' (with GitHub MCP)' : ' (no GitHub MCP)';
+  log(
+    `Agent ${agent.action}`,
+    `${agent.name} -> ${agentModelFqn}${githubSuffix}${agent.id ? ` (${agent.id})` : ''}`,
+  );
 
   log('Validating Daytona API key');
   try {
@@ -175,15 +189,6 @@ async function main() {
           : 'Daytona setup failed';
     warn(
       `Daytona sandbox not configured: ${message}. Open TrueForge → Settings → Sandbox providers, paste DAYTONA_API_KEY (needs write:snapshots + write:sandboxes), then re-run setup:trueforge.`,
-    );
-  }
-
-  if (githubToken) {
-    log('Configuring GitHub MCP', 'github');
-    await client.upsertGithubMcp({ token: githubToken });
-  } else {
-    warn(
-      'Skipping GitHub MCP — set GITHUB_TOKEN (or GITHUB_PAT) to enable GitHub tools on the agent',
     );
   }
 

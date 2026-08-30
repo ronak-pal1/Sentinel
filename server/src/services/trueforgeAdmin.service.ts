@@ -356,30 +356,54 @@ export class TrueForgeAdminClient {
     }>('GET', '/agents');
   }
 
-  async createAgent(input: { name: string; modelFqn: string }) {
+  async createAgent(input: {
+    name: string;
+    modelFqn: string;
+    includeGithubMcp: boolean;
+  }) {
     return this.request('POST', '/agents', {
       name: input.name,
-      manifest: buildSentinelAgentManifest(input.modelFqn),
+      manifest: buildSentinelAgentManifest(input.modelFqn, {
+        includeGithubMcp: input.includeGithubMcp,
+      }),
     });
   }
 
-  async updateAgent(input: { agentId: string; modelFqn: string }) {
+  async updateAgent(input: {
+    agentId: string;
+    modelFqn: string;
+    includeGithubMcp: boolean;
+  }) {
     return this.request('PUT', `/agents/${input.agentId}`, {
-      manifest: buildSentinelAgentManifest(input.modelFqn),
+      manifest: buildSentinelAgentManifest(input.modelFqn, {
+        includeGithubMcp: input.includeGithubMcp,
+      }),
     });
   }
 
-  async upsertSentinelAgent(modelFqn: string) {
+  async upsertSentinelAgent(
+    modelFqn: string,
+    options?: { includeGithubMcp?: boolean },
+  ) {
+    const includeGithubMcp = options?.includeGithubMcp ?? false;
     const agents = await this.listAgents();
     const existing = agents.data.find((agent) => agent.name === SENTINEL_AGENT_NAME);
 
     if (existing) {
-      await this.updateAgent({ agentId: existing.id, modelFqn });
+      await this.updateAgent({
+        agentId: existing.id,
+        modelFqn,
+        includeGithubMcp,
+      });
       return { action: 'updated' as const, name: SENTINEL_AGENT_NAME, id: existing.id };
     }
 
     try {
-      await this.createAgent({ name: SENTINEL_AGENT_NAME, modelFqn });
+      await this.createAgent({
+        name: SENTINEL_AGENT_NAME,
+        modelFqn,
+        includeGithubMcp,
+      });
       const refreshed = await this.listAgents();
       const created = refreshed.data.find((agent) => agent.name === SENTINEL_AGENT_NAME);
       return {
@@ -392,7 +416,11 @@ export class TrueForgeAdminClient {
         const refreshed = await this.listAgents();
         const found = refreshed.data.find((agent) => agent.name === SENTINEL_AGENT_NAME);
         if (found) {
-          await this.updateAgent({ agentId: found.id, modelFqn });
+          await this.updateAgent({
+            agentId: found.id,
+            modelFqn,
+            includeGithubMcp,
+          });
           return { action: 'updated' as const, name: SENTINEL_AGENT_NAME, id: found.id };
         }
       }
