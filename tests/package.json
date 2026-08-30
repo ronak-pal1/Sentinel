@@ -1,0 +1,17 @@
+{
+  "name": "sentinel-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "@types/supertest": "^6.0.3",
+    "mongodb-memory-server": "^10.1.4",
+    "supertest": "^7.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

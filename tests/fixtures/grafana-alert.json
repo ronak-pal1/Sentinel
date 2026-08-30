@@ -1,0 +1,17 @@
+{
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "HighErrorRate",
+        "service": "checkout-svc",
+        "job": "checkout-svc",
+        "severity": "critical"
+      },
+      "annotations": {
+        "summary": "error rate 11% over 5m (threshold 2%)",
+        "description": "5xx responses spiking on /checkout endpoint"
+      }
+    }
+  ]
+}
