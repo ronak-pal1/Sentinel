@@ -111,6 +111,18 @@ export class TrueForgeAdminClient {
     }>('GET', '/catalogs/model-providers');
   }
 
+  async listModelProviders() {
+    return this.request<{
+      data: Array<{
+        name: string;
+        manifest: {
+          type: string;
+          models?: Array<{ model_id: string; name: string }>;
+        };
+      }>;
+    }>('GET', '/settings/model-providers');
+  }
+
   async getMcpCatalog() {
     return this.request<{
       data: Array<{
@@ -159,12 +171,76 @@ export class TrueForgeAdminClient {
       ],
     };
 
-    if (input.providerType === 'custom' && 'name' in preset) {
-      manifest.name = (preset as { name?: string }).name;
-      manifest.base_url = (preset as { base_url?: string }).base_url;
+    return this.request('PUT', '/settings/model-providers', { manifest });
+  }
+
+  async upsertCustomModelProvider(input: {
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    modelId: string;
+    modelResourceName: string;
+  }) {
+    const manifest = {
+      type: 'custom' as const,
+      name: input.name,
+      base_url: input.baseUrl,
+      auth: { api_key: input.apiKey },
+      models: [
+        {
+          model_id: input.modelId,
+          name: input.modelResourceName,
+          properties: {},
+        },
+      ],
+    };
+
+    const existing = await this.listModelProviders();
+    const hasProvider = existing.data.some((provider) => provider.name === input.name);
+
+    if (hasProvider) {
+      return this.request('PUT', '/settings/model-providers', { manifest });
     }
 
-    return this.request('PUT', '/settings/model-providers', { manifest });
+    try {
+      return this.request('POST', '/settings/model-providers', { manifest });
+    } catch (err) {
+      if (err instanceof TrueForgeAdminError && err.status === 409) {
+        return this.request('PUT', '/settings/model-providers', { manifest });
+      }
+      throw err;
+    }
+  }
+
+  async verifyCustomModelProvider(input: {
+    providerName: string;
+    modelResourceName: string;
+    modelId: string;
+  }): Promise<void> {
+    const providers = await this.listModelProviders();
+    const provider = providers.data.find((entry) => entry.name === input.providerName);
+    if (!provider) {
+      throw new TrueForgeAdminError(
+        `Model provider "${input.providerName}" was not saved in TrueForge`,
+        500,
+      );
+    }
+
+    const model = provider.manifest.models?.find(
+      (entry) => entry.name === input.modelResourceName,
+    );
+    if (!model) {
+      throw new TrueForgeAdminError(
+        `Model "${input.modelResourceName}" not found on provider "${input.providerName}" after setup`,
+        500,
+      );
+    }
+    if (model.model_id !== input.modelId) {
+      throw new TrueForgeAdminError(
+        `Model provider has "${model.model_id}" but expected "${input.modelId}" — re-run setup:trueforge`,
+        500,
+      );
+    }
   }
 
   async upsertGithubMcp(input: { token: string }) {
@@ -197,7 +273,12 @@ export class TrueForgeAdminClient {
       throw new TrueForgeAdminError('Daytona sandbox preset not found in TrueForge catalog', 500);
     }
 
-    return this.request('PUT', '/settings/sandbox-providers', {
+    return this.request<{
+      data: {
+        status: 'pending' | 'ready' | 'failed';
+        status_reason: string | null;
+      };
+    }>('PUT', '/settings/sandbox-providers', {
       manifest: {
         type: daytona.type,
         auth: { api_key: input.apiKey },
@@ -221,21 +302,41 @@ export class TrueForgeAdminClient {
   async waitForSandboxReady(options?: {
     timeoutMs?: number;
     intervalMs?: number;
+    onStatus?: (status: string, reason: string | null) => void;
   }): Promise<void> {
-    const timeoutMs = options?.timeoutMs ?? 60_000;
-    const intervalMs = options?.intervalMs ?? 2_000;
+    const timeoutMs = options?.timeoutMs ?? 180_000;
+    const intervalMs = options?.intervalMs ?? 3_000;
     const started = Date.now();
 
     while (Date.now() - started < timeoutMs) {
-      const response = await this.getSandboxProvider();
+      let response: {
+        data: {
+          status: 'pending' | 'ready' | 'failed';
+          status_reason: string | null;
+        };
+      };
+
+      try {
+        response = await this.getSandboxProvider();
+      } catch (err) {
+        if (err instanceof TrueForgeAdminError && err.status === 404) {
+          options?.onStatus?.('pending', 'waiting for sandbox provider to be created');
+          await sleep(intervalMs);
+          continue;
+        }
+        throw err;
+      }
+
       const { status, status_reason: reason } = response.data;
+      options?.onStatus?.(status, reason);
 
       if (status === 'ready') {
         return;
       }
       if (status === 'failed') {
         throw new TrueForgeAdminError(
-          reason ?? 'Daytona sandbox provider failed to initialize',
+          reason ??
+            'Daytona sandbox provider failed to initialize — verify DAYTONA_API_KEY has write:sandboxes scope',
           422,
         );
       }
@@ -244,7 +345,7 @@ export class TrueForgeAdminClient {
     }
 
     throw new TrueForgeAdminError(
-      'Timed out waiting for Daytona sandbox provider to become ready',
+      'Timed out waiting for Daytona sandbox provider to become ready (first build can take a few minutes)',
       408,
     );
   }
@@ -255,30 +356,54 @@ export class TrueForgeAdminClient {
     }>('GET', '/agents');
   }
 
-  async createAgent(input: { name: string; modelFqn: string }) {
+  async createAgent(input: {
+    name: string;
+    modelFqn: string;
+    includeGithubMcp: boolean;
+  }) {
     return this.request('POST', '/agents', {
       name: input.name,
-      manifest: buildSentinelAgentManifest(input.modelFqn),
+      manifest: buildSentinelAgentManifest(input.modelFqn, {
+        includeGithubMcp: input.includeGithubMcp,
+      }),
     });
   }
 
-  async updateAgent(input: { agentId: string; modelFqn: string }) {
+  async updateAgent(input: {
+    agentId: string;
+    modelFqn: string;
+    includeGithubMcp: boolean;
+  }) {
     return this.request('PUT', `/agents/${input.agentId}`, {
-      manifest: buildSentinelAgentManifest(input.modelFqn),
+      manifest: buildSentinelAgentManifest(input.modelFqn, {
+        includeGithubMcp: input.includeGithubMcp,
+      }),
     });
   }
 
-  async upsertSentinelAgent(modelFqn: string) {
+  async upsertSentinelAgent(
+    modelFqn: string,
+    options?: { includeGithubMcp?: boolean },
+  ) {
+    const includeGithubMcp = options?.includeGithubMcp ?? false;
     const agents = await this.listAgents();
     const existing = agents.data.find((agent) => agent.name === SENTINEL_AGENT_NAME);
 
     if (existing) {
-      await this.updateAgent({ agentId: existing.id, modelFqn });
+      await this.updateAgent({
+        agentId: existing.id,
+        modelFqn,
+        includeGithubMcp,
+      });
       return { action: 'updated' as const, name: SENTINEL_AGENT_NAME, id: existing.id };
     }
 
     try {
-      await this.createAgent({ name: SENTINEL_AGENT_NAME, modelFqn });
+      await this.createAgent({
+        name: SENTINEL_AGENT_NAME,
+        modelFqn,
+        includeGithubMcp,
+      });
       const refreshed = await this.listAgents();
       const created = refreshed.data.find((agent) => agent.name === SENTINEL_AGENT_NAME);
       return {
@@ -291,7 +416,11 @@ export class TrueForgeAdminClient {
         const refreshed = await this.listAgents();
         const found = refreshed.data.find((agent) => agent.name === SENTINEL_AGENT_NAME);
         if (found) {
-          await this.updateAgent({ agentId: found.id, modelFqn });
+          await this.updateAgent({
+            agentId: found.id,
+            modelFqn,
+            includeGithubMcp,
+          });
           return { action: 'updated' as const, name: SENTINEL_AGENT_NAME, id: found.id };
         }
       }
@@ -304,6 +433,52 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export const OPENROUTER_DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
+export const DAYTONA_API_BASE_URL = 'https://app.daytona.io/api';
+
+export async function validateDaytonaApiKey(apiKey: string): Promise<void> {
+  const headers = { Authorization: `Bearer ${apiKey}` };
+
+  const sandboxResponse = await fetch(`${DAYTONA_API_BASE_URL}/sandbox`, { headers });
+  if (sandboxResponse.status === 401 || sandboxResponse.status === 403) {
+    throw new TrueForgeAdminError(
+      'DAYTONA_API_KEY was rejected — create a key with write:sandboxes in the Daytona dashboard',
+      422,
+    );
+  }
+  if (!sandboxResponse.ok) {
+    throw new TrueForgeAdminError(
+      `Daytona API check failed (${sandboxResponse.status}) — verify DAYTONA_API_KEY`,
+      422,
+    );
+  }
+
+  const snapshotsResponse = await fetch(`${DAYTONA_API_BASE_URL}/snapshots`, { headers });
+  if (snapshotsResponse.status === 401 || snapshotsResponse.status === 403) {
+    throw new TrueForgeAdminError(
+      'DAYTONA_API_KEY lacks snapshot permissions — TrueForge needs write:snapshots to build its sandbox image on first setup',
+      422,
+    );
+  }
+  if (!snapshotsResponse.ok) {
+    throw new TrueForgeAdminError(
+      `Daytona snapshots API check failed (${snapshotsResponse.status}) — verify DAYTONA_API_KEY has snapshot access`,
+      422,
+    );
+  }
+}
+
+export function buildAgentModelFqn(
+  providerName: string,
+  modelResourceName: string,
+): string {
+  return `${providerName}/${modelResourceName}`;
+}
+
+export function isOpenRouterCustomProvider(providerType: string): boolean {
+  return providerType === 'openrouter';
+}
+
 export function parseModelFqn(modelFqn: string): {
   providerType: string;
   modelName: string;
@@ -311,7 +486,7 @@ export function parseModelFqn(modelFqn: string): {
   const slash = modelFqn.indexOf('/');
   if (slash <= 0 || slash === modelFqn.length - 1) {
     throw new TrueForgeAdminError(
-      `TRUEFORGE_MODEL must be provider/model (e.g. anthropic/claude-sonnet-4-6), got "${modelFqn}"`,
+      `TRUEFORGE_MODEL must be provider/model (e.g. openrouter/gemini-2.5-flash), got "${modelFqn}"`,
       400,
     );
   }
@@ -330,6 +505,7 @@ const PROVIDER_API_KEY_ENV: Record<string, string> = {
   moonshot: 'MOONSHOT_API_KEY',
   alibaba: 'ALIBABA_API_KEY',
   zai: 'ZAI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
 };
 
 export function resolveModelApiKey(

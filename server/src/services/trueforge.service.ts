@@ -31,7 +31,9 @@ function buildAgentPayload() {
     return { name: env.TRUEFORGE_AGENT_NAME };
   }
   return {
-    spec: buildSentinelAgentManifest(env.TRUEFORGE_MODEL),
+    spec: buildSentinelAgentManifest(env.TRUEFORGE_MODEL, {
+      includeGithubMcp: false,
+    }),
   };
 }
 
