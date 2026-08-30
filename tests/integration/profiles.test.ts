@@ -33,6 +33,23 @@ describe('Profiles API', () => {
     expect(res.body.data.mode).toBe('demo');
   });
 
+  it('switches profile mode demo → real → demo', async () => {
+    const created = await api().createProfile('Mode Switcher');
+    const creds = { id: created.id, token: created.token };
+
+    await api().setMode(creds, 'demo').expect(200);
+    let me = await api().getMyProfile(creds).expect(200);
+    expect(me.body.data.mode).toBe('demo');
+
+    await api().setMode(creds, 'real').expect(200);
+    me = await api().getMyProfile(creds).expect(200);
+    expect(me.body.data.mode).toBe('real');
+
+    await api().setMode(creds, 'demo').expect(200);
+    me = await api().getMyProfile(creds).expect(200);
+    expect(me.body.data.mode).toBe('demo');
+  });
+
   it('returns 401 when auth headers are missing', async () => {
     const res = await api().raw.get('/api/profiles/me').expect(401);
     expect(res.body.success).toBe(false);

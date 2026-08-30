@@ -8,6 +8,7 @@ type Props = {
 
 export function ApprovalGate({ incident, onApprove, onReject }: Props) {
   const sandbox = incident.sandboxResult;
+  const hasPr = Boolean(incident.prUrl);
 
   return (
     <div
@@ -37,8 +38,20 @@ export function ApprovalGate({ incident, onApprove, onReject }: Props) {
           </p>
           <p className="text-sm font-medium text-(--foreground-color) leading-snug">
             {incident.proposedAction ??
-              `Merge PR #${incident.prNumber ?? 42} and redeploy ${incident.service}`}
+              (hasPr
+                ? `Merge PR #${incident.prNumber} and mark incident resolved`
+                : `Open a fix PR, merge it, and redeploy ${incident.service}`)}
           </p>
+          {hasPr && incident.prUrl ? (
+            <a
+              href={incident.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block mt-2 text-[12px] font-mono text-[#B8791F] hover:underline"
+            >
+              View PR #{incident.prNumber} →
+            </a>
+          ) : null}
         </div>
 
         <div>
@@ -67,8 +80,9 @@ export function ApprovalGate({ incident, onApprove, onReject }: Props) {
         </div>
 
         <p className="text-[12px] text-[#C9736B] font-medium leading-snug border border-[#C9736B]/40 bg-[#C9736B]/10 px-3 py-2">
-          This action is irreversible. Merging will deploy the change to the
-          live demo system.
+          {hasPr
+            ? "Approving will merge the open GitHub PR and mark this incident resolved. Ensure your token has write access to the repo."
+            : "Approving will open a GitHub PR (if a patch is ready), attempt to merge it, and resolve the incident."}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-2 pt-1">
@@ -77,7 +91,7 @@ export function ApprovalGate({ incident, onApprove, onReject }: Props) {
             onClick={onApprove}
             className="flex-1 bg-[#EDA53B] hover:bg-[#d9942f] text-[#1a1a1a] font-semibold text-sm px-4 py-3 transition-colors"
           >
-            Approve &amp; Merge
+            {hasPr ? "Approve & merge PR" : "Approve & open PR"}
           </button>
           <button
             type="button"

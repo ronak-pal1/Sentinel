@@ -349,8 +349,17 @@ export async function approveIncident(
   let prNumber = incident.prNumber;
   let diff = incident.diff ?? incident.proposedPatch;
 
-  if (
-    !prUrl &&
+  // PR may already have been opened after sandbox verification — do not create a duplicate.
+  if (prUrl) {
+    await eventService.appendEvent({
+      incidentId: id,
+      type: 'info',
+      tool: 'github',
+      message: `Using existing PR #${prNumber ?? '?'}`,
+      detail: prUrl,
+      phase: 'pr_opened',
+    });
+  } else if (
     incident.proposedPatch &&
     incident.githubOwner &&
     incident.githubRepo
@@ -386,6 +395,45 @@ export async function approveIncident(
     }
   }
 
+  let mergeMessage: string | undefined;
+  if (
+    prNumber != null &&
+    incident.githubOwner &&
+    incident.githubRepo
+  ) {
+    try {
+      const merge = await github.mergePullRequest(profileId, {
+        owner: incident.githubOwner,
+        repo: incident.githubRepo,
+        pullNumber: prNumber,
+        commitTitle: `[Sentinel] Merge fix for ${incident.alertType} on ${incident.service}`,
+      });
+      mergeMessage = merge.message;
+      await eventService.appendEvent({
+        incidentId: id,
+        type: 'success',
+        tool: 'github',
+        message: merge.merged
+          ? `PR #${prNumber} merged`
+          : `PR #${prNumber} merge attempted: ${merge.message}`,
+        ...(merge.sha || prUrl
+          ? { detail: merge.sha ?? prUrl }
+          : {}),
+        phase: 'resolved',
+      });
+    } catch (err) {
+      logger.error('Failed to merge PR on approval', err);
+      await eventService.appendEvent({
+        incidentId: id,
+        type: 'failure',
+        tool: 'github',
+        message: `Failed to merge PR #${prNumber} — incident still marked resolved`,
+        detail: err instanceof Error ? err.message : 'Unknown error',
+        phase: 'resolved',
+      });
+    }
+  }
+
   const approvedAt = new Date().toISOString();
   await Incident.updateOne(
     { id },
@@ -407,7 +455,11 @@ export async function approveIncident(
   await eventService.appendEvent({
     incidentId: id,
     type: 'success',
-    message: `Approved by ${approvedBy} — fix merged/deployed`,
+    message: mergeMessage
+      ? `Approved by ${approvedBy} — ${mergeMessage}`
+      : prUrl
+        ? `Approved by ${approvedBy} — remediation accepted (PR ${prUrl})`
+        : `Approved by ${approvedBy} — remediation accepted`,
     phase: 'resolved',
   });
 

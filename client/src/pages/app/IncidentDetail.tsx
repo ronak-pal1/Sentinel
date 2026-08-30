@@ -125,7 +125,7 @@ export default function IncidentDetail() {
         <div className="xl:w-[65%] border-b xl:border-b-0 xl:border-r border-(--border-color) min-w-0">
           <InvestigationGraph
             phase={incident.phase}
-            dimmed={showGate}
+            dimmed={false}
             onNodeClick={(p) => setScrollPhase(p)}
           />
           {showDiff && (

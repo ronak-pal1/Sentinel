@@ -35,6 +35,8 @@ type SentinelFlowCanvasProps = {
   onNodeClick?: (phase: IncidentPhase) => void;
 };
 
+const MIN_FIT_HEIGHT = 40;
+
 function FlowInner({
   nodes: inputNodes,
   edges: inputEdges,
@@ -43,10 +45,11 @@ function FlowInner({
   interactive = false,
   dimmed,
   header,
-  minHeight = "14rem",
+  minHeight = "18rem",
   onNodeClick,
 }: SentinelFlowCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const resizeTimerRef = useRef<number | null>(null);
   const { fitView } = useReactFlow();
 
   const preparedNodes = useMemo(() => {
@@ -79,25 +82,39 @@ function FlowInner({
   }, [preparedNodes, setNodes]);
 
   const fitToView = useCallback(() => {
+    const el = containerRef.current;
+    if (!el || el.clientHeight < MIN_FIT_HEIGHT) return;
     fitView({ padding: 0.12, maxZoom: 1 });
   }, [fitView]);
 
+  // Fit once on mount only — do not re-fit on every phase change (that blanks the viewport).
   useEffect(() => {
     const timer = window.setTimeout(() => {
       fitToView();
-    }, 0);
+    }, 50);
     return () => window.clearTimeout(timer);
-  }, [fitToView, preparedNodes, inputEdges, phase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount-only fit
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
     const observer = new ResizeObserver(() => {
-      fitToView();
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+      }
+      resizeTimerRef.current = window.setTimeout(() => {
+        fitToView();
+      }, 80);
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+      }
+    };
   }, [fitToView]);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
@@ -117,7 +134,7 @@ function FlowInner({
 
   return (
     <div
-      className={`sentinel-flow transition-opacity duration-300 ${dimmed ? "opacity-50" : "opacity-100"}`}
+      className={`sentinel-flow transition-opacity duration-300 ${dimmed ? "opacity-80" : "opacity-100"}`}
       style={{
         backgroundColor: "var(--canvas-color)",
         backgroundImage:
@@ -139,7 +156,7 @@ function FlowInner({
       <div
         ref={containerRef}
         className="w-full"
-        style={{ height: minHeight }}
+        style={{ height: minHeight, minHeight }}
       >
         <ReactFlow
           nodes={nodes}

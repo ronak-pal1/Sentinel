@@ -1,9 +1,17 @@
 import { Octokit } from '@octokit/rest';
 import { StatusCodes } from 'http-status-codes';
 import { Settings } from '../models/Settings';
+import { Webhook } from '../models/Webhook';
 import { AppError } from '../utils/AppError';
 import { decryptSecret, encryptSecret } from '../utils/crypto';
 import { logger } from '../utils/logger';
+
+/** Max repos to scan for PRs — full account scans were timing out the UI. */
+const PULLS_REPO_LIMIT = 20;
+/** Concurrent GitHub pulls.list calls. */
+const PULLS_CONCURRENCY = 5;
+/** PRs to keep after merge/sort. */
+const PULLS_RESULT_CAP = 100;
 
 export type GitHubRepo = {
   id: number;
@@ -104,28 +112,87 @@ export async function listRepos(profileId: string): Promise<GitHubRepo[]> {
   return repos;
 }
 
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index]!);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Lists recent PRs without scanning every repo the user can access.
+ * Prefer webhook-linked repos, then fill with recently updated repos.
+ */
 export async function listAllPullRequests(
   profileId: string,
 ): Promise<GitHubPullRequest[]> {
-  const repos = await listRepos(profileId);
-  const octokit = await getOctokit(profileId);
-  const pulls: GitHubPullRequest[] = [];
-  const cap = 500;
+  const [octokit, allRepos, webhooks] = await Promise.all([
+    getOctokit(profileId),
+    listRepos(profileId),
+    Webhook.find({ profileId }).lean(),
+  ]);
 
-  for (const repo of repos) {
-    if (pulls.length >= cap) break;
+  const byFullName = new Map(allRepos.map((r) => [r.fullName, r]));
+  const selected: GitHubRepo[] = [];
+  const seen = new Set<string>();
+
+  for (const wh of webhooks) {
+    const fullName = `${wh.githubOwner}/${wh.githubRepo}`;
+    if (seen.has(fullName)) continue;
+    const repo = byFullName.get(fullName);
+    if (repo) {
+      selected.push(repo);
+      seen.add(fullName);
+    } else {
+      selected.push({
+        id: 0,
+        owner: wh.githubOwner,
+        name: wh.githubRepo,
+        fullName,
+        private: false,
+        defaultBranch: 'main',
+      });
+      seen.add(fullName);
+    }
+    if (selected.length >= PULLS_REPO_LIMIT) break;
+  }
+
+  for (const repo of allRepos) {
+    if (selected.length >= PULLS_REPO_LIMIT) break;
+    if (seen.has(repo.fullName)) continue;
+    selected.push(repo);
+    seen.add(repo.fullName);
+  }
+
+  const batches = await mapPool(selected, PULLS_CONCURRENCY, async (repo) => {
     try {
       const { data } = await octokit.rest.pulls.list({
         owner: repo.owner,
         repo: repo.name,
         state: 'all',
-        per_page: 30,
+        per_page: 20,
         sort: 'updated',
         direction: 'desc',
       });
-      for (const pr of data) {
-        if (pulls.length >= cap) break;
-        pulls.push({
+      return data.map(
+        (pr): GitHubPullRequest => ({
           id: pr.id,
           number: pr.number,
           title: pr.title,
@@ -134,16 +201,21 @@ export async function listAllPullRequests(
           url: pr.html_url,
           createdAt: pr.created_at,
           updatedAt: pr.updated_at,
-        });
-      }
+        }),
+      );
     } catch (err) {
       logger.warn(`Failed to list PRs for ${repo.fullName}`, err);
+      return [] as GitHubPullRequest[];
     }
-  }
+  });
 
-  return pulls.sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
+  return batches
+    .flat()
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .slice(0, PULLS_RESULT_CAP);
 }
 
 export async function fetchRepoContext(
@@ -214,23 +286,87 @@ export async function createPullRequest(
     repo: input.repo,
     ref: `heads/${base}`,
   });
+  const baseSha = baseRef.data.object.sha;
+
+  const baseCommit = await octokit.rest.git.getCommit({
+    owner: input.owner,
+    repo: input.repo,
+    commit_sha: baseSha,
+  });
+
+  // GitHub rejects PRs with no commits between head and base — commit the
+  // proposed patch as a real file so the branch diverges.
+  const patchBody = input.patch.slice(0, 60000);
+  const summaryBody = [
+    '# Sentinel proposed fix',
+    '',
+    input.body,
+    '',
+    '## Patch',
+    '',
+    '```diff',
+    patchBody,
+    '```',
+    '',
+  ].join('\n');
+
+  const [patchBlob, summaryBlob] = await Promise.all([
+    octokit.rest.git.createBlob({
+      owner: input.owner,
+      repo: input.repo,
+      content: Buffer.from(patchBody, 'utf8').toString('base64'),
+      encoding: 'base64',
+    }),
+    octokit.rest.git.createBlob({
+      owner: input.owner,
+      repo: input.repo,
+      content: Buffer.from(summaryBody, 'utf8').toString('base64'),
+      encoding: 'base64',
+    }),
+  ]);
+
+  const { data: tree } = await octokit.rest.git.createTree({
+    owner: input.owner,
+    repo: input.repo,
+    base_tree: baseCommit.data.tree.sha,
+    tree: [
+      {
+        path: '.sentinel/proposed-fix.patch',
+        mode: '100644',
+        type: 'blob',
+        sha: patchBlob.data.sha,
+      },
+      {
+        path: '.sentinel/SENTINEL_FIX.md',
+        mode: '100644',
+        type: 'blob',
+        sha: summaryBlob.data.sha,
+      },
+    ],
+  });
+
+  const { data: commit } = await octokit.rest.git.createCommit({
+    owner: input.owner,
+    repo: input.repo,
+    message: input.title,
+    tree: tree.sha,
+    parents: [baseSha],
+  });
 
   await octokit.rest.git.createRef({
     owner: input.owner,
     repo: input.repo,
     ref: `refs/heads/${branchName}`,
-    sha: baseRef.data.object.sha,
+    sha: commit.sha,
   });
 
-  // Apply patch by creating/updating files from diff hunks (simplified: store patch as commit message context)
-  // For hackathon: create PR with patch in body; branch points to base (user sees diff in PR description)
   const { data: pr } = await octokit.rest.pulls.create({
     owner: input.owner,
     repo: input.repo,
     title: input.title,
     head: branchName,
     base,
-    body: `${input.body}\n\n## Proposed patch\n\n\`\`\`diff\n${input.patch.slice(0, 60000)}\n\`\`\``,
+    body: `${input.body}\n\n## Proposed patch\n\n\`\`\`diff\n${patchBody}\n\`\`\`\n\n_Also committed under \`.sentinel/\` on this branch._`,
   });
 
   return {
@@ -238,6 +374,53 @@ export async function createPullRequest(
     prNumber: pr.number,
     diff: input.patch,
   };
+}
+
+export async function mergePullRequest(
+  profileId: string,
+  input: {
+    owner: string;
+    repo: string;
+    pullNumber: number;
+    commitTitle?: string;
+  },
+): Promise<{ merged: boolean; message: string; sha?: string }> {
+  const octokit = await getOctokit(profileId);
+  try {
+    const { data } = await octokit.rest.pulls.merge({
+      owner: input.owner,
+      repo: input.repo,
+      pull_number: input.pullNumber,
+      merge_method: 'merge',
+      ...(input.commitTitle ? { commit_title: input.commitTitle } : {}),
+    });
+    return {
+      merged: Boolean(data.merged),
+      message: data.message ?? (data.merged ? 'Pull request merged' : 'Merge did not complete'),
+      ...(data.sha ? { sha: data.sha } : {}),
+    };
+  } catch (err) {
+    const status =
+      err && typeof err === 'object' && 'status' in err
+        ? Number((err as { status: unknown }).status)
+        : undefined;
+    const message =
+      err instanceof Error ? err.message : 'Failed to merge pull request';
+
+    if (status === 405 || status === 409) {
+      throw new AppError(
+        `Cannot merge PR #${input.pullNumber}: ${message}`,
+        StatusCodes.CONFLICT,
+      );
+    }
+    if (status === 403 || status === 404) {
+      throw new AppError(
+        `Cannot merge PR #${input.pullNumber}: check that the GitHub token has write access to ${input.owner}/${input.repo}. ${message}`,
+        StatusCodes.FORBIDDEN,
+      );
+    }
+    throw new AppError(message, StatusCodes.BAD_GATEWAY);
+  }
 }
 
 export async function testConnection(

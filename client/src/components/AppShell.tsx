@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import { IncidentProvider } from "../lib/incidents/IncidentProvider";
 import { useProfile } from "../lib/ProfileContext";
 
@@ -7,7 +7,7 @@ const AppShell = () => {
   const isReal = mode === "real";
 
   return (
-    <IncidentProvider>
+    <IncidentProvider key={mode}>
       <div className="font-sans text-(--foreground-color)">
         <div className="px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 border-b border-(--border-color) bg-(--surface-color)">
           <nav className="flex flex-wrap items-center gap-1 sm:gap-2 pb-3">
@@ -70,15 +70,17 @@ const AppShell = () => {
             </NavLink>
             {profile ? (
               <span className="ml-auto flex items-center gap-2 text-[11px] font-mono text-(--muted-color)">
-                <span
+                <Link
+                  to="/app/settings#mode"
                   className={
                     isReal
-                      ? "text-[#B8791F] border border-[#EDA53B] px-1.5 py-0.5"
-                      : "border border-(--border-color) px-1.5 py-0.5"
+                      ? "text-[#B8791F] border border-[#EDA53B] px-1.5 py-0.5 hover:bg-[#EDA53B]/10 transition-colors"
+                      : "border border-(--border-color) px-1.5 py-0.5 hover:border-primary transition-colors"
                   }
+                  title="Switch experience mode"
                 >
                   {isReal ? "REAL" : "DEMO"}
-                </span>
+                </Link>
                 {profile.displayName}
               </span>
             ) : null}

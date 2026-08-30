@@ -58,6 +58,85 @@ async function seedInitialTelemetry(incidentId: string) {
   }
 }
 
+async function openIncidentPullRequest(
+  incidentId: string,
+  context: {
+    profileId: string;
+    githubOwner?: string;
+    githubRepo?: string;
+  },
+  patch: string,
+): Promise<{ prUrl: string; prNumber: number } | null> {
+  if (!context.githubOwner || !context.githubRepo) {
+    await eventService.appendEvent({
+      incidentId,
+      type: 'failure',
+      tool: 'github',
+      message: 'Cannot open PR — webhook is missing GitHub owner/repo',
+      phase: 'sandbox_verifying',
+    });
+    return null;
+  }
+
+  const incident = await Incident.findOne({ id: incidentId }).lean<IncidentAttrs>();
+  if (incident?.prUrl) {
+    return {
+      prUrl: incident.prUrl,
+      prNumber: incident.prNumber ?? 0,
+    };
+  }
+
+  try {
+    const pr = await github.createPullRequest(context.profileId, {
+      owner: context.githubOwner,
+      repo: context.githubRepo,
+      title: `[Sentinel] Fix for ${incident?.alertType ?? 'incident'} on ${incident?.service ?? context.githubRepo}`,
+      body: [
+        `Automated fix proposed by Sentinel for incident ${incidentId}.`,
+        '',
+        `Root cause: ${incident?.rootCause ?? 'See investigation logs'}`,
+      ].join('\n'),
+      patch,
+    });
+
+    await Incident.updateOne(
+      { id: incidentId },
+      {
+        $set: {
+          phase: 'pr_opened',
+          prUrl: pr.prUrl,
+          prNumber: pr.prNumber,
+          proposedPatch: patch,
+          diff: pr.diff,
+          proposedAction: `Review PR #${pr.prNumber} and approve remediation`,
+        },
+      },
+    );
+
+    await eventService.appendEvent({
+      incidentId,
+      type: 'success',
+      tool: 'github',
+      message: `PR #${pr.prNumber} opened`,
+      detail: pr.prUrl,
+      phase: 'pr_opened',
+    });
+
+    return { prUrl: pr.prUrl, prNumber: pr.prNumber };
+  } catch (err) {
+    logger.error('Failed to open PR after sandbox verification', err);
+    await eventService.appendEvent({
+      incidentId,
+      type: 'failure',
+      tool: 'github',
+      message: 'Failed to open PR after sandbox verification',
+      detail: err instanceof Error ? err.message : 'Unknown error',
+      phase: 'sandbox_verifying',
+    });
+    return null;
+  }
+}
+
 async function consumeAgentStream(
   incidentId: string,
   sessionId: string,
@@ -70,6 +149,7 @@ async function consumeAgentStream(
 ) {
   let fullModelContent = '';
   let sandboxVerified = false;
+  let openedPrUrl: string | undefined;
 
   try {
     await eventService.appendEvent({
@@ -133,6 +213,7 @@ async function consumeAgentStream(
         const parsed = parseSandboxResultFromToolOutput(toolOutput);
         if (parsed) {
           sandboxVerified = parsed.passed;
+          // Do not set pr_opened here — that phase is reserved for a real GitHub PR.
           await Incident.updateOne(
             { id: incidentId },
             {
@@ -142,7 +223,7 @@ async function consumeAgentStream(
                   errorRate: parsed.errorRate,
                   requestsReplayed: parsed.requestsReplayed,
                 },
-                phase: parsed.passed ? 'pr_opened' : 'sandbox_verifying',
+                phase: 'sandbox_verifying',
               },
             },
           );
@@ -154,8 +235,20 @@ async function consumeAgentStream(
               ? `Sandbox verification passed (${parsed.latencyMs}ms)`
               : 'Sandbox verification reported issues',
             detail: toolOutput.slice(0, 2000),
-            phase: parsed.passed ? 'pr_opened' : 'sandbox_verifying',
+            phase: 'sandbox_verifying',
           });
+
+          if (parsed.passed && !openedPrUrl) {
+            const earlyPatch = extractDiffFromContent(fullModelContent);
+            if (earlyPatch) {
+              const pr = await openIncidentPullRequest(
+                incidentId,
+                context,
+                earlyPatch,
+              );
+              if (pr) openedPrUrl = pr.prUrl;
+            }
+          }
         }
       }
 
@@ -241,25 +334,38 @@ async function consumeAgentStream(
       });
     }
 
+    // End of stream: open PR if sandbox passed and we have a patch but no PR yet.
+    if (sandboxVerified && patch && !openedPrUrl) {
+      const pr = await openIncidentPullRequest(incidentId, context, patch);
+      if (pr) openedPrUrl = pr.prUrl;
+    }
+
     const incident = await Incident.findOne({ id: incidentId }).lean<IncidentAttrs>();
     if (incident && incident.phase !== 'awaiting_approval') {
+      const hasPr = Boolean(openedPrUrl || incident.prUrl);
       await Incident.updateOne(
         { id: incidentId },
         {
           $set: {
             phase: 'awaiting_approval',
-            proposedAction: sandboxVerified
-              ? 'Sandbox verification passed — review diff and approve to open PR'
-              : patch
-                ? 'Review proposed fix and approve to open PR'
-                : 'Agent completed investigation — review and approve next steps',
+            proposedAction: hasPr
+              ? `PR opened — review ${incident.prUrl ?? openedPrUrl} and approve remediation`
+              : sandboxVerified
+                ? patch
+                  ? 'Sandbox passed but PR could not be opened — review patch and approve to retry'
+                  : 'Sandbox verification passed — review findings and approve next steps'
+                : patch
+                  ? 'Review proposed fix and approve to open PR'
+                  : 'Agent completed investigation — review and approve next steps',
           },
         },
       );
       await eventService.appendEvent({
         incidentId,
         type: 'action',
-        message: 'Awaiting human approval before opening PR',
+        message: hasPr
+          ? 'Awaiting human approval — PR already opened'
+          : 'Awaiting human approval before opening PR',
         phase: 'awaiting_approval',
       });
     }
@@ -376,8 +482,8 @@ export async function startWebhookIncident(
       'Use the TrueForge sandbox (Daytona) to clone the repository, apply your proposed patch, and run tests.',
       'Propose a fix as a unified diff patch in a ```diff code block.',
       'Report sandbox verification results (latency, errors, test output).',
-      'Do NOT create a PR or push changes — output the patch and verification only.',
-      'After sandbox verification, wait for human approval before any production change.',
+      'Do NOT create a PR or push changes yourself — Sentinel will open the GitHub PR after sandbox verification for human review.',
+      'After verification, wait for human approval before any production merge or deploy.',
     ].join('\n');
 
     void consumeAgentStream(id, sessionId, prompt, {
