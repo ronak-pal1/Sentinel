@@ -1,3 +1,4 @@
+import { apiUrl } from "./apiBase";
 import { clearProfile, getStoredProfile, type StoredProfile } from "./profile";
 import type { ProfileMode } from "./profile";
 import type { Incident, LogEvent, MetricPoint } from "./types";
@@ -91,7 +92,7 @@ export async function apiFetch<T>(
     throw new Error("No profile credentials");
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: {
       ...authHeaders(profile),
@@ -119,7 +120,7 @@ export async function apiFetch<T>(
 export async function createProfile(
   displayName: string,
 ): Promise<CreatedProfile> {
-  const response = await fetch("/api/profiles", {
+  const response = await fetch(apiUrl("/api/profiles"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ displayName }),

@@ -1,3 +1,4 @@
+import { apiUrl } from "./apiBase";
 import { getStoredProfile } from "./profile";
 
 export type SseHandlers = {
@@ -17,7 +18,7 @@ export function subscribeIncidentEvents(
     return () => {};
   }
 
-  const url = `/api/incidents/${incidentId}/events/stream`;
+  const url = apiUrl(`/api/incidents/${incidentId}/events/stream`);
   const es = new EventSource(url, {
     withCredentials: false,
   });
