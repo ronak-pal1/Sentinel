@@ -1,0 +1,7 @@
+{
+  "name": "sentinel",
+  "private": true,
+  "scripts": {
+    "test": "npm run test --prefix tests"
+  }
+}

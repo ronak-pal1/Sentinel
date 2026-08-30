@@ -140,12 +140,17 @@ cd client && npm run lint && npm run build
 
 # Incident CLI
 cd incident-cli && npm run typecheck && npm run build
+
+# Integration tests (from repo root)
+npm test
+# or: cd tests && npm ci && npm test
 ```
 
 ### Testing your changes
 
 | Area | How to verify |
 |------|---------------|
+| **Automated tests** | `npm test` from repo root (in-memory MongoDB; no TrueForge/GitHub required) |
 | **Demo mode** | Create profile → Demo → click **Break It** → walk through incident phases |
 | **Webhooks** | Real mode → create webhook → `curl` or `incident-cli` → check Incidents page |
 | **Agent flow** | Real mode + TrueForge running → fire webhook → watch event log and phase transitions |
@@ -282,6 +287,7 @@ Write self-documenting code. Add comments only for non-obvious business logic (e
 
 - [ ] Code compiles (`npm run typecheck` / `npm run build`)
 - [ ] Client lints clean (`npm run lint` in client)
+- [ ] Integration tests pass (`npm test` from repo root)
 - [ ] Manually tested the affected flow (Demo and/or Real mode)
 - [ ] No secrets or `.env` files committed
 - [ ] Updated docs if behavior changed (README, CHANGELOG, package READMEs)

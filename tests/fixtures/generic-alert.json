@@ -1,0 +1,6 @@
+{
+  "service": "checkout-svc",
+  "alertType": "p99 latency spike",
+  "message": "checkout-svc p99 at 4.2s (threshold 2s)",
+  "severity": "critical"
+}
