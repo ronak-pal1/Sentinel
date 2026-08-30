@@ -19,7 +19,8 @@
   <a href="#-real-mode-flow">Real Mode</a> ·
   <a href="#-incident-cli">Incident CLI</a> ·
   <a href="#-project-structure">Structure</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a>
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="#code-review-with-qodo">Qodo Review</a>
 </p>
 
 <p align="center">
@@ -316,6 +317,22 @@ See [client/.env.example](client/.env.example).
 ## 🤝 Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code conventions, and pull request guidelines.
+
+---
+
+## Code Review with Qodo
+
+Sentinel used [Qodo](https://www.qodo.ai) on every major PR during the hackathon. On **[PR #4 — Feat: Added controllers, routes, services and validators](https://github.com/ronak-pal1/Sentinel/pull/4)** — the incident API, TrueForge orchestration, and SSE streaming layer — Qodo flagged security gaps on unauthenticated mutations, SSE reliability bugs (overlapping polls, timestamp cursors, orphaned streams), and several incident lifecycle race conditions. We fixed the security and streaming issues before merge; we deferred Qodo's "durable workflow workers / pub-sub fanout" architecture recommendation as out of scope for the hackathon timeline, and left a few low-frequency correctness edge cases (atomic single-active-incident enforcement, structured turn input passthrough) for post-hackathon hardening.
+
+### Review history
+
+| PR | Scope | Qodo surfaced | Our decision | Follow-up on final code |
+|----|-------|---------------|--------------|-------------------------|
+| [#1](https://github.com/ronak-pal1/Sentinel/pull/1) | React homepage | 5 UX bugs: broken hash CTAs, inert demo buttons, non-functional theme toggle, mobile overflow/clipping | **Fixed all** in follow-up commits before merge | Verified: section IDs (`welcome`, `incident`, `capabilities`) in [`client/src/pages/Home.tsx`](client/src/pages/Home.tsx) |
+| [#2](https://github.com/ronak-pal1/Sentinel/pull/2) | Express bootstrap | Parser 4xx → 500, concurrent shutdown race, degraded health returning HTTP 200 | **Fixed all** (`Qodo Review Resolved` commit) | Verified: [`errorHandler.ts`](server/src/middleware/errorHandler.ts) preserves 4xx; [`index.ts`](server/src/index.ts) `shuttingDown` guard; [`health.controller.ts`](server/src/controllers/health.controller.ts) returns 503 when MongoDB disconnected |
+| [#4](https://github.com/ronak-pal1/Sentinel/pull/4) | Incident API + agent | 12 bugs + architecture note (workers vs polling SSE) | **Fixed:** profile auth ([`requireProfile.ts`](server/src/middleware/requireProfile.ts)), compound SSE cursor + sequential polling ([`event.service.ts`](server/src/services/event.service.ts)), agent stream cleanup ([`agent.controller.ts`](server/src/controllers/agent.controller.ts)). **Deferred:** durable workers / change-stream fanout. **Acknowledged, not yet fixed:** terminal-phase guards on escalate/close, atomic `breakIt`, structured `input` passthrough | Re-reviewed against `main`: security + SSE fixes landed; architectural deferrals documented as intentional |
+
+For the full review trail across all 15 merged PRs, see the [closed pull requests](https://github.com/ronak-pal1/Sentinel/pulls?q=is%3Apr+is%3Aclosed).
 
 ---
 
