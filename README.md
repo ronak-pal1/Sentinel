@@ -24,10 +24,14 @@ cd client && npm install && npm run dev
 Optional for real mode:
 
 - **TrueForge**: `npx @truefoundry/trueforge` (default `http://localhost:8790`)
-- **Bootstrap TrueForge** (model, GitHub MCP, Daytona sandbox, `sentinel` agent):
+- **Bootstrap TrueForge** (OpenRouter model via custom provider, GitHub MCP, Daytona sandbox, `sentinel` agent):
 
   ```bash
-  # Add DAYTONA_API_KEY, ANTHROPIC_API_KEY, GITHUB_TOKEN to server/.env first
+  # Add to server/.env first:
+  #   DAYTONA_API_KEY, OPENROUTER_API_KEY, OPENROUTER_MODEL_ID, GITHUB_TOKEN
+  # DAYTONA_API_KEY needs write:sandboxes and write:snapshots (TrueForge builds a snapshot on first setup).
+  # OPENROUTER_MODEL_ID is the OpenRouter slug (e.g. google/gemini-2.5-flash).
+  # TRUEFORGE_MODEL is the agent FQN (default openrouter/gemini-2.5-flash).
   cd server && npm run setup:trueforge
   ```
 

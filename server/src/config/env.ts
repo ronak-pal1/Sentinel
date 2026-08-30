@@ -22,7 +22,7 @@ const envSchema = z.object({
     (v) => (v === '' || v === undefined || v === null ? undefined : v),
     z.string().min(1).optional(),
   ),
-  TRUEFORGE_MODEL: z.string().min(1).default('anthropic/claude-sonnet-4-6'),
+  TRUEFORGE_MODEL: z.string().min(1).default('openrouter/gemini-2.5-flash'),
   SETTINGS_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'SETTINGS_ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
